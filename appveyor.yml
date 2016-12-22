@@ -1,0 +1,10 @@
+os: Visual Studio 2015
+
+install:
+  - cmd: refreshenv
+  - cmd: set
+  - cmd: python --version
+
+
+test_script:
+  - "python test.py"
