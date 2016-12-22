@@ -1,4 +1,4 @@
-#import coff
+import coff
 import subprocess
 import os
 import shutil
@@ -68,7 +68,7 @@ def compare_files(f1, f2):
     with open(f1, 'rb') as file1, open(f2, 'rb') as file2:
         return file1.read() == file2.read()
 
-shutil.rmtree('tmp')
+shutil.rmtree('tmp', ignore_errors=True)
 os.mkdir('tmp')
 os.mkdir('tmp/p1')
 os.mkdir('tmp/p2')
@@ -89,3 +89,9 @@ print compare_files('tmp/p1/main.obj', 'tmp/p2/main.obj')
 print compare_files('tmp/p1/main.exe', 'tmp/p2/main.exe')
 print compare_files('tmp/p1/main.dll', 'tmp/p2/main.dll')
 print compare_files('tmp/p1/main.lib', 'tmp/p2/main.lib')
+
+coff.strip('tmp/p1/main.obj', 'tmp/p1/main-stripped.obj')
+coff.strip('tmp/p2/main.obj', 'tmp/p2/main-stripped.obj')
+
+print compare_files('tmp/p1/main-stripped.obj', 'tmp/p2/main-stripped.obj')
+print compare_files('tmp/p1/main-stripped.obj', 'testdata/main-stripped.obj')
