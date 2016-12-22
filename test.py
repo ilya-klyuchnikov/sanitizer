@@ -33,7 +33,6 @@ def build_obj(name, extension):
     for project in PROJECTS:
         flags = [
             '/c',
-            '/Zi',
             # '/Fd:tmp/{0}/main.pdb'.format(project),
             '/Fo:{0}/{1}.obj'.format(project, name),
             '{0}/{1}.{2}'.format(project, name, extension),
