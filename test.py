@@ -27,7 +27,13 @@ LINK_EXE = "C:\\Program Files (x86)\\Microsoft Visual Studio 14.0\\VC\\bin\\amd6
 
 
 def build_obj(project):
-    flags = ['/c', '/Fo:tmp/{0}/main.obj'.format(project), 'testdata/{0}/main.c'.format(project)]
+    flags = [
+        '/c',
+        # '/Zi',  # place info into debug file
+        # '/Fd:tmp/{0}/main.pdb'.format(project),
+        '/Fo:tmp/{0}/main.obj'.format(project),
+        'testdata/{0}/main.c'.format(project),
+    ]
     command = [CL_EXE] + INCLUDE_FLAGS + flags
     print command
     result = subprocess.call(command)
