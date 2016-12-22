@@ -11,5 +11,7 @@ build: off
 build_script:
   - "python test.py"
 
-test_script:
-  - "python test.py"
+artifacts:
+  - path: tmp
+    name: binaries
+    type: zip
