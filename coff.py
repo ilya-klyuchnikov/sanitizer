@@ -1,7 +1,7 @@
 # http://www.microsoft.com/whdc/system/platform/firmware/PECOFF.mspx
 # https://github.com/trailofbits/mcsema/tree/master/llvm-3.5/test/tools
 import struct
-import sys
+import array
 
 # https://github.com/anlongfei/llvm/blob/bd978bf7d464ca151bc7bc7d589ed3eccf7b8d5f/include/llvm/MC/MCSectionCOFF.h
 
@@ -25,29 +25,12 @@ def strip(input_file, out_file):
     bytes = ifile.read()
     ifile.close()
 
-    import array
-
-    # or 'b'?
-
-    machine, = struct.unpack_from('<h', bytes, 0)
-    # TODO - will be less
     n_sections, = struct.unpack_from('<h', bytes, 2)
-
-    # TODO - zero
-    date, = struct.unpack_from('<I', bytes, 4)
-
     pointer_to_symbol_table, = struct.unpack_from('<I', bytes, 8)
     number_of_symbols, = struct.unpack_from('<I', bytes, 12)
-    # should be zero - add assertions
     size_of_optional_header, = struct.unpack_from('<h', bytes, 16)
 
-    print('=============')
-    print(number_of_symbols)
-    print(machine)
-    print(n_sections)
-    print(date)
-    print pointer_to_symbol_table
-    print(size_of_optional_header)
+    assert size_of_optional_header == 0
 
     removed_sections = 0
     # an array of tuples - (start, size)
@@ -56,11 +39,8 @@ def strip(input_file, out_file):
     # sorted_by_second = sorted(data, key=lambda tup: tup[1])
 
     removed_bytes = 0
-
     sections = []
-
     max_removed = 0
-
     # section mapping - old -> new (zero based)
     mapping = {}
 
@@ -155,8 +135,6 @@ def strip(input_file, out_file):
     RESULT.fromstring(struct.pack('<h', n_sections))
     RESULT.fromstring(struct.pack('<I', 0))
     RESULT.fromstring(struct.pack('<I', pointer_to_symbol_table - removed_bytes))
-    # number of symbols
-    #RESULT.fromstring(struct.pack('<I', number_of_symbols - removed_symbols))
     RESULT.fromstring(struct.pack('<I', number_of_symbols))
     RESULT.fromstring(bytes[16:20])
 
@@ -174,7 +152,6 @@ def strip(input_file, out_file):
             RESULT.fromstring(struct.pack('<I', ptr_to_raw_data))
             RESULT.fromstring(struct.pack('<I', ptr_to_relocations))
             RESULT.fromstring(bytes[this_start + 28 : this_start + 40])
-
 
     def stripped(i):
         for start, size in removed_pieces:
@@ -215,7 +192,7 @@ def strip(input_file, out_file):
         else:
             aux_symbols -= 1
             if removing_symbol:
-                print "REMOVING AUX SYMBOL"
+                print "PROCESSING AUX SYMBOL"
                 RESULT.fromstring(str(bytearray(18)))
             else:
                 RESULT.fromstring(bytes[start : start + SYMBOL_SYZE])
@@ -224,11 +201,6 @@ def strip(input_file, out_file):
     # string section
     RESULT.fromstring(bytes[pointer_to_symbol_table + SYMBOL_SYZE * number_of_symbols:])
 
-    z = RESULT.tostring()
-
     ofile = open(out_file, 'wb')
     RESULT.tofile(ofile)
     ofile.close()
-
-    ofile = open(out_file, 'rb')
-    zzz = ofile.read()

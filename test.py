@@ -95,3 +95,6 @@ coff.strip('tmp/p2/main.obj', 'tmp/p2/main-stripped.obj')
 
 print compare_files('tmp/p1/main-stripped.obj', 'tmp/p2/main-stripped.obj')
 print compare_files('tmp/p1/main-stripped.obj', 'testdata/main-stripped.obj')
+
+assert compare_files('tmp/p1/main-stripped.obj', 'testdata/main-stripped.obj')
+assert False
