@@ -27,6 +27,13 @@ LINK_EXE = "C:\\Program Files (x86)\\Microsoft Visual Studio 14.0\\VC\\bin\\amd6
 
 PROJECTS = ['tmp/p1', 'tmp/p2']
 
+VERBOSE = False
+
+
+def verbose(msg):
+    if VERBOSE:
+        print msg
+
 
 def build_obj(name, extension):
     """builds 2 obj files"""
@@ -39,7 +46,7 @@ def build_obj(name, extension):
             '{0}/{1}.{2}'.format(project, name, extension),
         ]
         command = [CL_EXE] + INCLUDE_FLAGS + flags
-        print command
+        verbose(command)
         result = subprocess.call(command)
         assert result == 0
 
@@ -54,7 +61,7 @@ def link_exe(name):
             '/OUT:{0}/{1}.exe'.format(project, name),
         ]
         command = [LINK_EXE] + LIBPATH_FLAGS + flags
-        print command
+        verbose(command)
         result = subprocess.call(command)
         assert result == 0
 
@@ -69,9 +76,10 @@ def link_dll(name):
             '/OUT:{0}/{1}.dll'.format(project, name),
         ]
         command = [LINK_EXE] + LIBPATH_FLAGS + flags
-        print command
+        verbose(command)
         result = subprocess.call(command)
         assert result == 0
+
 
 def make_lib(name):
     """builds 2 lib files"""
@@ -82,7 +90,7 @@ def make_lib(name):
             '/OUT:{0}.lib'.format(name)
         ]
         command = [LIB_EXE] + flags
-        print command
+        verbose(command)
         result = subprocess.call(command, cwd=project)
         assert result == 0
 
