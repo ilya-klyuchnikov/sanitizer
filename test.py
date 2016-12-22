@@ -25,75 +25,116 @@ CL_EXE = "C:\\Program Files (x86)\\Microsoft Visual Studio 14.0\\VC\\bin\\amd64\
 LIB_EXE = "C:\\Program Files (x86)\\Microsoft Visual Studio 14.0\\VC\\bin\\amd64\\lib.exe"
 LINK_EXE = "C:\\Program Files (x86)\\Microsoft Visual Studio 14.0\\VC\\bin\\amd64\\link.exe"
 
-
-def build_obj(project):
-    flags = [
-        '/c',
-        # '/Zi',  # place info into debug file
-        # '/Fd:tmp/{0}/main.pdb'.format(project),
-        '/Fo:tmp/{0}/main.obj'.format(project),
-        'testdata/{0}/main.c'.format(project),
-    ]
-    command = [CL_EXE] + INCLUDE_FLAGS + flags
-    print command
-    result = subprocess.call(command)
-    assert result == 0
+PROJECTS = ['tmp/p1', 'tmp/p2']
 
 
-def link_exe(project):
-    flags = ['tmp/{0}/main.obj'.format(project), '/OUT:tmp/{0}/main.exe'.format(project)]
-    command = [LINK_EXE] + LIBPATH_FLAGS + flags
-    print command
-    result = subprocess.call(command)
-    assert result == 0
+def build_obj(name, extension):
+    """builds 2 obj files"""
+    for project in PROJECTS:
+        flags = [
+            '/c',
+            '/Zi',
+            # '/Fd:tmp/{0}/main.pdb'.format(project),
+            '/Fo:{0}/{1}.obj'.format(project, name),
+            '{0}/{1}.{2}'.format(project, name, extension),
+        ]
+        command = [CL_EXE] + INCLUDE_FLAGS + flags
+        print command
+        result = subprocess.call(command)
+        assert result == 0
 
 
-def link_dll(project):
-    flags = ['tmp/{0}/main.obj'.format(project), '/DLL', '/OUT:tmp/{0}/main.dll'.format(project)]
-    command = [LINK_EXE] + LIBPATH_FLAGS + flags
-    print command
-    result = subprocess.call(command)
-    assert result == 0
+# not everything could be a dll - so, maybe skip this part?
+def link_exe(name):
+    """builds 2 exe files"""
+    for project in PROJECTS:
+        flags = [
+            '{0}/{1}.obj'.format(project, name),
+            '/OUT:{0}/{1}.exe'.format(project, name),
+        ]
+        command = [LINK_EXE] + LIBPATH_FLAGS + flags
+        print command
+        result = subprocess.call(command)
+        assert result == 0
 
 
-def make_lib(project):
-    flags = ['main.obj'.format(project), '/OUT:main.lib'.format(project)]
-    command = [LIB_EXE] + flags
-    print command
-    result = subprocess.call(command, cwd='tmp/{0}'.format(project))
-    assert result == 0
+def link_dll(name):
+    """builds 2 dll files"""
+    for project in PROJECTS:
+        flags = [
+            '{0}/{1}.obj'.format(project, name),
+            '/DLL',
+            '/OUT:{0}/{1}.dll'.format(project, name),
+        ]
+        command = [LINK_EXE] + LIBPATH_FLAGS + flags
+        print command
+        result = subprocess.call(command)
+        assert result == 0
+
+def make_lib(name):
+    """builds 2 lib files"""
+    for project in PROJECTS:
+        flags = [
+            '{0}.obj'.format(name),
+            '/OUT:{0}.lib'.format(name)
+        ]
+        command = [LIB_EXE] + flags
+        print command
+        result = subprocess.call(command, cwd=project)
+        assert result == 0
+
+
+def strip(name):
+    """builds 2 lib files"""
+    for project in PROJECTS:
+        coff.strip('{0}/{1}.obj'.format(project, name), '{0}/{1}-stripped.obj'.format(project, name))
 
 
 def compare_files(f1, f2):
     with open(f1, 'rb') as file1, open(f2, 'rb') as file2:
         return file1.read() == file2.read()
 
+
+def check_diff(name):
+    n1 = '{0}/{1}.obj'.format(PROJECTS[0], name)
+    n2 = '{0}/{1}.obj'.format(PROJECTS[1], name)
+    assert not compare_files(n1, n2), name
+
+
+def check_the_same(name):
+    n1 = '{0}/{1}-stripped.obj'.format(PROJECTS[0], name)
+    n2 = '{0}/{1}-stripped.obj'.format(PROJECTS[1], name)
+    assert compare_files(n1, n2)
+
+
+def check_expected(name):
+    n1 = '{0}/{1}-stripped.obj'.format(PROJECTS[0], name)
+    n2 = '{0}/{1}-stripped.obj'.format('testdata/expected', name)
+    assert compare_files(n1, n2), name
+
+
+def copy_expected(name):
+    n1 = '{0}/{1}-stripped.obj'.format(PROJECTS[0], name)
+    n2 = '{0}/{1}-stripped.obj'.format('testdata/expected', name)
+    shutil.copyfile(n1, n2)
+
 shutil.rmtree('tmp', ignore_errors=True)
-os.mkdir('tmp')
-os.mkdir('tmp/p1')
-os.mkdir('tmp/p2')
+shutil.copytree('testdata/src', 'tmp/p1')
+shutil.copytree('testdata/src', 'tmp/p2')
 
-build_obj('p1')
-build_obj('p2')
+files = [
+    ('main', 'c'),
+    ('main1', 'cpp'),
+    ('test', 'cpp'),
+]
 
-link_exe('p1')
-link_exe('p2')
-
-link_dll('p1')
-link_dll('p2')
-
-make_lib('p1')
-make_lib('p2')
-
-print compare_files('tmp/p1/main.obj', 'tmp/p2/main.obj')
-print compare_files('tmp/p1/main.exe', 'tmp/p2/main.exe')
-print compare_files('tmp/p1/main.dll', 'tmp/p2/main.dll')
-print compare_files('tmp/p1/main.lib', 'tmp/p2/main.lib')
-
-coff.strip('tmp/p1/main.obj', 'tmp/p1/main-stripped.obj')
-coff.strip('tmp/p2/main.obj', 'tmp/p2/main-stripped.obj')
-
-print compare_files('tmp/p1/main-stripped.obj', 'tmp/p2/main-stripped.obj')
-print compare_files('tmp/p1/main-stripped.obj', 'testdata/main-stripped.obj')
-
-assert compare_files('tmp/p1/main-stripped.obj', 'testdata/main-stripped.obj')
+for f, ext in files:
+    build_obj(f, ext)
+    link_dll(f)
+    make_lib(f)
+    strip(f)
+    check_diff(f)
+    check_the_same(f)
+    link_dll(f + '-stripped')
+    check_expected(f)
+    #copy_expected(f)
