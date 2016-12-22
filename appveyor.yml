@@ -5,6 +5,7 @@ install:
   - cmd: set
   - cmd: python --version
 
+build: off
 
 test_script:
   - "python test.py"
