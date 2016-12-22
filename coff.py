@@ -210,12 +210,15 @@ def strip(input_file, out_file):
                 # everything after section
                 RESULT.fromstring(bytes[start + 14 : start + SYMBOL_SYZE])
             else:
+                removing_symbol = False
                 RESULT.fromstring(bytes[start : start + SYMBOL_SYZE])
         else:
             aux_symbols -= 1
-            if not removing_symbol:
-                pass
-            RESULT.fromstring(bytes[start : start + SYMBOL_SYZE])
+            if removing_symbol:
+                print "REMOVING AUX SYMBOL"
+                RESULT.fromstring(str(bytearray(18)))
+            else:
+                RESULT.fromstring(bytes[start : start + SYMBOL_SYZE])
 
 
     # string section
