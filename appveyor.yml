@@ -4,7 +4,7 @@ install:
   - cmd: refreshenv
   - cmd: set
   - cmd: python --version
-  - powershell: cl.ps1
+  - cmd: wmic OS get OSArchitecture
 
 build: off
 
