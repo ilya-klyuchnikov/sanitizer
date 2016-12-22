@@ -32,6 +32,7 @@ def build_obj(name, extension):
     """builds 2 obj files"""
     for project in PROJECTS:
         flags = [
+            '/nologo',
             '/c',
             # '/Fd:tmp/{0}/main.pdb'.format(project),
             '/Fo:{0}/{1}.obj'.format(project, name),
@@ -48,6 +49,7 @@ def link_exe(name):
     """builds 2 exe files"""
     for project in PROJECTS:
         flags = [
+            '/nologo',
             '{0}/{1}.obj'.format(project, name),
             '/OUT:{0}/{1}.exe'.format(project, name),
         ]
@@ -61,6 +63,7 @@ def link_dll(name):
     """builds 2 dll files"""
     for project in PROJECTS:
         flags = [
+            '/nologo',
             '{0}/{1}.obj'.format(project, name),
             '/DLL',
             '/OUT:{0}/{1}.dll'.format(project, name),
@@ -74,6 +77,7 @@ def make_lib(name):
     """builds 2 lib files"""
     for project in PROJECTS:
         flags = [
+            '/nologo',
             '{0}.obj'.format(name),
             '/OUT:{0}.lib'.format(name)
         ]
