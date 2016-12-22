@@ -16,223 +16,216 @@ IMAGE_SCN_MEM_DISCARDABLE = 0x02000000
 IMAGE_SCN_LNK_COMDAT = 0x00001000
 # https://docs.python.org/2/library/struct.html
 
-#ifile = open("/Volumes/C/Users/ilya/hermetic/vs/Win32Project1/Win32Project1/lib1.obj",'rb')
-
 SYMBOL_SYZE = 18
 
-#input_file = "/Volumes/C/Users/ilya/hermetic/vs/Win32Project1/lib01.obj"
-#input_file = "/Volumes/C/Users/ilya/hermetic/x.obj"
-#input_file = "x.obj"
-#out_file = "/Volumes/C/Users/ilya/hermetic/vs/Win32Project1/lib01--stripped.obj"
 
-input_file = sys.argv[1]
-out_file = sys.argv[2]
+def strip(input_file, out_file):
 
-ifile = open(input_file, 'rb')
-bytes = ifile.read()
-ifile.close()
+    ifile = open(input_file, 'rb')
+    bytes = ifile.read()
+    ifile.close()
 
-import array
+    import array
 
-# or 'b'?
+    # or 'b'?
 
-machine, = struct.unpack_from('<h', bytes, 0)
-# TODO - will be less
-n_sections, = struct.unpack_from('<h', bytes, 2)
+    machine, = struct.unpack_from('<h', bytes, 0)
+    # TODO - will be less
+    n_sections, = struct.unpack_from('<h', bytes, 2)
 
-# TODO - zero
-date, = struct.unpack_from('<I', bytes, 4)
+    # TODO - zero
+    date, = struct.unpack_from('<I', bytes, 4)
 
-pointer_to_symbol_table, = struct.unpack_from('<I', bytes, 8)
-number_of_symbols, = struct.unpack_from('<I', bytes, 12)
-# should be zero - add assertions
-size_of_optional_header, = struct.unpack_from('<h', bytes, 16)
+    pointer_to_symbol_table, = struct.unpack_from('<I', bytes, 8)
+    number_of_symbols, = struct.unpack_from('<I', bytes, 12)
+    # should be zero - add assertions
+    size_of_optional_header, = struct.unpack_from('<h', bytes, 16)
 
-print('=============')
-print(number_of_symbols)
-print(machine)
-print(n_sections)
-print(date)
-print pointer_to_symbol_table
-print(size_of_optional_header)
+    print('=============')
+    print(number_of_symbols)
+    print(machine)
+    print(n_sections)
+    print(date)
+    print pointer_to_symbol_table
+    print(size_of_optional_header)
 
-removed_sections = 0
-# an array of tuples - (start, size)
-removed_pieces = []
+    removed_sections = 0
+    # an array of tuples - (start, size)
+    removed_pieces = []
 
-# sorted_by_second = sorted(data, key=lambda tup: tup[1])
+    # sorted_by_second = sorted(data, key=lambda tup: tup[1])
 
-removed_bytes = 0
+    removed_bytes = 0
 
-sections = []
+    sections = []
 
-max_removed = 0
+    max_removed = 0
 
-# section mapping - old -> new (zero based)
-mapping = {}
+    # section mapping - old -> new (zero based)
+    mapping = {}
 
-for section_i in range(0, n_sections):
-    this_start = SECTION_HEADERS_START + section_i * SECTION_HEADER_SIZE
-    sec_characteristics, = struct.unpack_from('<I', bytes, this_start + 36)
-    to_strip =  (sec_characteristics & IMAGE_SCN_MEM_DISCARDABLE != 0) and (sec_characteristics & IMAGE_SCN_LNK_COMDAT == 0)
+    for section_i in range(0, n_sections):
+        this_start = SECTION_HEADERS_START + section_i * SECTION_HEADER_SIZE
+        sec_characteristics, = struct.unpack_from('<I', bytes, this_start + 36)
+        to_strip =  (sec_characteristics & IMAGE_SCN_MEM_DISCARDABLE != 0) and (sec_characteristics & IMAGE_SCN_LNK_COMDAT == 0)
 
-    if not to_strip:
-        mapping[section_i] = section_i - removed_sections
-    else:
-        removed_sections += 1
-        #removed_bytes += SECTION_HEADER_SIZE
+        if not to_strip:
+            mapping[section_i] = section_i - removed_sections
+        else:
+            removed_sections += 1
+            #removed_bytes += SECTION_HEADER_SIZE
 
-for section_i in range(0, n_sections):
-    this_start = SECTION_HEADERS_START + section_i * SECTION_HEADER_SIZE
-    name = bytes[this_start : this_start + 8]
-    size_of_raw_data, = struct.unpack_from('<I', bytes, this_start + 16)
-    # TODO - WILL CHANGE (size 4)
-    ptr_to_raw_data, = struct.unpack_from('<I', bytes, this_start + 20)
-    # TODO - WILL CHANGE (size 4)
-    ptr_to_relocations, = struct.unpack_from('<I', bytes, this_start + 24)
-    ptr_to_line_numbers, = struct.unpack_from('<I', bytes, this_start + 28)
-    number_of_relocations, = struct.unpack_from('<h', bytes, this_start + 32)
-    number_of_line_numbers, = struct.unpack_from('<h', bytes, this_start + 34)
-    sec_characteristics, = struct.unpack_from('<I', bytes, this_start + 36)
+    for section_i in range(0, n_sections):
+        this_start = SECTION_HEADERS_START + section_i * SECTION_HEADER_SIZE
+        name = bytes[this_start : this_start + 8]
+        size_of_raw_data, = struct.unpack_from('<I', bytes, this_start + 16)
+        # TODO - WILL CHANGE (size 4)
+        ptr_to_raw_data, = struct.unpack_from('<I', bytes, this_start + 20)
+        # TODO - WILL CHANGE (size 4)
+        ptr_to_relocations, = struct.unpack_from('<I', bytes, this_start + 24)
+        ptr_to_line_numbers, = struct.unpack_from('<I', bytes, this_start + 28)
+        number_of_relocations, = struct.unpack_from('<h', bytes, this_start + 32)
+        number_of_line_numbers, = struct.unpack_from('<h', bytes, this_start + 34)
+        sec_characteristics, = struct.unpack_from('<I', bytes, this_start + 36)
 
-    to_strip = (sec_characteristics & IMAGE_SCN_MEM_DISCARDABLE != 0) and (sec_characteristics & IMAGE_SCN_LNK_COMDAT == 0)
+        to_strip = (sec_characteristics & IMAGE_SCN_MEM_DISCARDABLE != 0) and (sec_characteristics & IMAGE_SCN_LNK_COMDAT == 0)
 
-    if ptr_to_raw_data > 0:
-        if ptr_to_raw_data < max_removed:
-            print "WTF??"
-            print ptr_to_raw_data
-            print max_removed
-            print section_i
-            print name
-            assert False
-    if ptr_to_relocations > 0:
-        assert ptr_to_relocations >= max_removed
+        if ptr_to_raw_data > 0:
+            if ptr_to_raw_data < max_removed:
+                print "WTF??"
+                print ptr_to_raw_data
+                print max_removed
+                print section_i
+                print name
+                assert False
+        if ptr_to_relocations > 0:
+            assert ptr_to_relocations >= max_removed
 
-    if to_strip:
-        if size_of_raw_data > 0:
-            removed_pieces.append((ptr_to_raw_data, size_of_raw_data))
-            max_removed = max(max_removed, ptr_to_raw_data + size_of_raw_data)
-        if (number_of_relocations > 0):
-            pass
-            #removed_pieces.append((ptr_to_relocations, number_of_relocations * RELOCATION_SIZE))
-            #max_removed = max(max_removed, ptr_to_relocations + number_of_relocations * RELOCATION_SIZE)
+        if to_strip:
+            if size_of_raw_data > 0:
+                removed_pieces.append((ptr_to_raw_data, size_of_raw_data))
+                max_removed = max(max_removed, ptr_to_raw_data + size_of_raw_data)
+            if (number_of_relocations > 0):
+                pass
+                #removed_pieces.append((ptr_to_relocations, number_of_relocations * RELOCATION_SIZE))
+                #max_removed = max(max_removed, ptr_to_relocations + number_of_relocations * RELOCATION_SIZE)
 
-    print '++++++++++++++'
-    print name
-    print ptr_to_raw_data
-    print size_of_raw_data
-    print ptr_to_relocations
-    print number_of_relocations
+        print '++++++++++++++'
+        print name
+        print ptr_to_raw_data
+        print size_of_raw_data
+        print ptr_to_relocations
+        print number_of_relocations
 
-    if to_strip:
-        removed_bytes = removed_bytes + size_of_raw_data #+ (number_of_relocations * RELOCATION_SIZE)
-        # this is wrong!!!!
-        #sections.append(None)
-        sections.append((0, max(ptr_to_relocations - removed_bytes, 0)))
-    else:
-        # if ((ptr_to_relocations > 0) and ptr_to_relocations - removed_bytes < 0):
-        #     print ">>>>>>>>>>>>>>"
-        #     print section_i
-        #     print name
-        #     print ptr_to_relocations
-        #     raise Exception(ptr_to_relocations - removed_bytes)
+        if to_strip:
+            removed_bytes = removed_bytes + size_of_raw_data #+ (number_of_relocations * RELOCATION_SIZE)
+            # this is wrong!!!!
+            #sections.append(None)
+            sections.append((0, max(ptr_to_relocations - removed_bytes, 0)))
+        else:
+            # if ((ptr_to_relocations > 0) and ptr_to_relocations - removed_bytes < 0):
+            #     print ">>>>>>>>>>>>>>"
+            #     print section_i
+            #     print name
+            #     print ptr_to_relocations
+            #     raise Exception(ptr_to_relocations - removed_bytes)
 
-        sections.append((max(ptr_to_raw_data - removed_bytes, 0), max(ptr_to_relocations - removed_bytes, 0)))
+            sections.append((max(ptr_to_raw_data - removed_bytes, 0), max(ptr_to_relocations - removed_bytes, 0)))
 
-removed_symbols = 0
-aux_symbols = 0
-removing_symbol = False
-for i in range(0, number_of_symbols):
-    start = pointer_to_symbol_table + SYMBOL_SYZE * i
-    if aux_symbols == 0:
-        aux_symbols, = struct.unpack_from('<B', bytes, start + 17)
-        section, = struct.unpack_from('<h', bytes, start + 12)
-        if section > 0:
-            removing_symbol = (section - 1) not in mapping
+    removed_symbols = 0
+    aux_symbols = 0
+    removing_symbol = False
+    for i in range(0, number_of_symbols):
+        start = pointer_to_symbol_table + SYMBOL_SYZE * i
+        if aux_symbols == 0:
+            aux_symbols, = struct.unpack_from('<B', bytes, start + 17)
+            section, = struct.unpack_from('<h', bytes, start + 12)
+            if section > 0:
+                removing_symbol = (section - 1) not in mapping
+                if removing_symbol:
+                    removed_symbols += 1
+        else:
+            aux_symbols -= 1
             if removing_symbol:
                 removed_symbols += 1
-    else:
-        aux_symbols -= 1
-        if removing_symbol:
-            removed_symbols += 1
 
-print bytes[0:20]
-RESULT = array.array('b')
-RESULT.fromstring(bytes[0:2])
-RESULT.fromstring(struct.pack('<h', n_sections))
-RESULT.fromstring(struct.pack('<I', 0))
-RESULT.fromstring(struct.pack('<I', pointer_to_symbol_table - removed_bytes))
-# number of symbols
-#RESULT.fromstring(struct.pack('<I', number_of_symbols - removed_symbols))
-RESULT.fromstring(struct.pack('<I', number_of_symbols))
-RESULT.fromstring(bytes[16:20])
+    print bytes[0:20]
+    RESULT = array.array('b')
+    RESULT.fromstring(bytes[0:2])
+    RESULT.fromstring(struct.pack('<h', n_sections))
+    RESULT.fromstring(struct.pack('<I', 0))
+    RESULT.fromstring(struct.pack('<I', pointer_to_symbol_table - removed_bytes))
+    # number of symbols
+    #RESULT.fromstring(struct.pack('<I', number_of_symbols - removed_symbols))
+    RESULT.fromstring(struct.pack('<I', number_of_symbols))
+    RESULT.fromstring(bytes[16:20])
 
-for section_i in range(0, n_sections):
-    section = sections[section_i]
-    if section:
-        this_start = SECTION_HEADERS_START + section_i * SECTION_HEADER_SIZE
-        RESULT.fromstring(bytes[this_start : this_start + 16])
-        ptr_to_raw_data, ptr_to_relocations = section
-        if (ptr_to_raw_data > 0):
-            RESULT.fromstring(bytes[this_start + 16: this_start + 20])
-        else:
-            RESULT.fromstring(struct.pack('<I', 0))
-
-        RESULT.fromstring(struct.pack('<I', ptr_to_raw_data))
-        RESULT.fromstring(struct.pack('<I', ptr_to_relocations))
-        RESULT.fromstring(bytes[this_start + 28 : this_start + 40])
-
-
-def stripped(i):
-    for start, size in removed_pieces:
-        if start <= i < start + size:
-            return True
-    return False
-
-for i in range(SECTION_HEADERS_START + n_sections*SECTION_HEADER_SIZE, pointer_to_symbol_table):
-    if stripped(i):
-        pass
-    else:
-        RESULT.fromstring(bytes[i])
-
-aux_symbols = 0
-removing_symbol = False
-# repacking symbol table now
-for i in range(0, number_of_symbols):
-    start = pointer_to_symbol_table + SYMBOL_SYZE * i
-    if aux_symbols == 0:
-        aux_symbols, = struct.unpack_from('<B', bytes, start + 17)
-        section, = struct.unpack_from('<h', bytes, start + 12)
-        if section > 0:
-            removing_symbol = (section - 1) not in mapping
-            if removing_symbol:
-                new_section = 0
+    for section_i in range(0, n_sections):
+        section = sections[section_i]
+        if section:
+            this_start = SECTION_HEADERS_START + section_i * SECTION_HEADER_SIZE
+            RESULT.fromstring(bytes[this_start : this_start + 16])
+            ptr_to_raw_data, ptr_to_relocations = section
+            if (ptr_to_raw_data > 0):
+                RESULT.fromstring(bytes[this_start + 16: this_start + 20])
             else:
-                # coping with mapping
-                new_section = mapping[section - 1] + 1
-                # everything up to section
-            new_section = section
-            RESULT.fromstring(bytes[start : start + 12])
-            RESULT.fromstring(struct.pack('<h', new_section))
-            # everything after section
-            RESULT.fromstring(bytes[start + 14 : start + SYMBOL_SYZE])
-        else:
-            RESULT.fromstring(bytes[start : start + SYMBOL_SYZE])
-    else:
-        aux_symbols -= 1
-        if not removing_symbol:
+                RESULT.fromstring(struct.pack('<I', 0))
+
+            RESULT.fromstring(struct.pack('<I', ptr_to_raw_data))
+            RESULT.fromstring(struct.pack('<I', ptr_to_relocations))
+            RESULT.fromstring(bytes[this_start + 28 : this_start + 40])
+
+
+    def stripped(i):
+        for start, size in removed_pieces:
+            if start <= i < start + size:
+                return True
+        return False
+
+    for i in range(SECTION_HEADERS_START + n_sections*SECTION_HEADER_SIZE, pointer_to_symbol_table):
+        if stripped(i):
             pass
-        RESULT.fromstring(bytes[start : start + SYMBOL_SYZE])
+        else:
+            RESULT.fromstring(bytes[i])
+
+    aux_symbols = 0
+    removing_symbol = False
+    # repacking symbol table now
+    for i in range(0, number_of_symbols):
+        start = pointer_to_symbol_table + SYMBOL_SYZE * i
+        if aux_symbols == 0:
+            aux_symbols, = struct.unpack_from('<B', bytes, start + 17)
+            section, = struct.unpack_from('<h', bytes, start + 12)
+            if section > 0:
+                removing_symbol = (section - 1) not in mapping
+                if removing_symbol:
+                    new_section = 0
+                else:
+                    # coping with mapping
+                    new_section = mapping[section - 1] + 1
+                    # everything up to section
+                new_section = section
+                RESULT.fromstring(bytes[start : start + 12])
+                RESULT.fromstring(struct.pack('<h', new_section))
+                # everything after section
+                RESULT.fromstring(bytes[start + 14 : start + SYMBOL_SYZE])
+            else:
+                RESULT.fromstring(bytes[start : start + SYMBOL_SYZE])
+        else:
+            aux_symbols -= 1
+            if not removing_symbol:
+                pass
+            RESULT.fromstring(bytes[start : start + SYMBOL_SYZE])
 
 
-# string section
-RESULT.fromstring(bytes[pointer_to_symbol_table + SYMBOL_SYZE * number_of_symbols:])
+    # string section
+    RESULT.fromstring(bytes[pointer_to_symbol_table + SYMBOL_SYZE * number_of_symbols:])
 
-z = RESULT.tostring()
+    z = RESULT.tostring()
 
-ofile = open(out_file, 'wb')
-RESULT.tofile(ofile)
-ofile.close()
+    ofile = open(out_file, 'wb')
+    RESULT.tofile(ofile)
+    ofile.close()
 
-ofile = open(out_file, 'rb')
-zzz = ofile.read()
+    ofile = open(out_file, 'rb')
+    zzz = ofile.read()
