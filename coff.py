@@ -47,7 +47,7 @@ def strip(input_file, out_file):
     for section_i in range(0, n_sections):
         this_start = SECTION_HEADERS_START + section_i * SECTION_HEADER_SIZE
         sec_characteristics, = struct.unpack_from('<I', bytes, this_start + 36)
-        to_strip =  (sec_characteristics & IMAGE_SCN_MEM_DISCARDABLE != 0) and (sec_characteristics & IMAGE_SCN_LNK_COMDAT == 0)
+        to_strip = (sec_characteristics & IMAGE_SCN_MEM_DISCARDABLE != 0) and (sec_characteristics & IMAGE_SCN_LNK_COMDAT == 0)
 
         if not to_strip:
             mapping[section_i] = section_i - removed_sections
@@ -59,25 +59,16 @@ def strip(input_file, out_file):
         this_start = SECTION_HEADERS_START + section_i * SECTION_HEADER_SIZE
         name = bytes[this_start : this_start + 8]
         size_of_raw_data, = struct.unpack_from('<I', bytes, this_start + 16)
-        # TODO - WILL CHANGE (size 4)
         ptr_to_raw_data, = struct.unpack_from('<I', bytes, this_start + 20)
-        # TODO - WILL CHANGE (size 4)
         ptr_to_relocations, = struct.unpack_from('<I', bytes, this_start + 24)
         ptr_to_line_numbers, = struct.unpack_from('<I', bytes, this_start + 28)
         number_of_relocations, = struct.unpack_from('<h', bytes, this_start + 32)
         number_of_line_numbers, = struct.unpack_from('<h', bytes, this_start + 34)
         sec_characteristics, = struct.unpack_from('<I', bytes, this_start + 36)
 
+        # is this enough?
         to_strip = (sec_characteristics & IMAGE_SCN_MEM_DISCARDABLE != 0) and (sec_characteristics & IMAGE_SCN_LNK_COMDAT == 0)
 
-        if ptr_to_raw_data > 0:
-            if ptr_to_raw_data < max_removed:
-                print "WTF??"
-                print ptr_to_raw_data
-                print max_removed
-                print section_i
-                print name
-                assert False
         if ptr_to_relocations > 0:
             assert ptr_to_relocations >= max_removed
 
@@ -85,31 +76,11 @@ def strip(input_file, out_file):
             if size_of_raw_data > 0:
                 removed_pieces.append((ptr_to_raw_data, size_of_raw_data))
                 max_removed = max(max_removed, ptr_to_raw_data + size_of_raw_data)
-            if (number_of_relocations > 0):
-                pass
-                #removed_pieces.append((ptr_to_relocations, number_of_relocations * RELOCATION_SIZE))
-                #max_removed = max(max_removed, ptr_to_relocations + number_of_relocations * RELOCATION_SIZE)
-
-        print '++++++++++++++'
-        print name
-        print ptr_to_raw_data
-        print size_of_raw_data
-        print ptr_to_relocations
-        print number_of_relocations
 
         if to_strip:
             removed_bytes = removed_bytes + size_of_raw_data #+ (number_of_relocations * RELOCATION_SIZE)
-            # this is wrong!!!!
-            #sections.append(None)
             sections.append((0, max(ptr_to_relocations - removed_bytes, 0)))
         else:
-            # if ((ptr_to_relocations > 0) and ptr_to_relocations - removed_bytes < 0):
-            #     print ">>>>>>>>>>>>>>"
-            #     print section_i
-            #     print name
-            #     print ptr_to_relocations
-            #     raise Exception(ptr_to_relocations - removed_bytes)
-
             sections.append((max(ptr_to_raw_data - removed_bytes, 0), max(ptr_to_relocations - removed_bytes, 0)))
 
     removed_symbols = 0
@@ -129,7 +100,6 @@ def strip(input_file, out_file):
             if removing_symbol:
                 removed_symbols += 1
 
-    print bytes[0:20]
     RESULT = array.array('b')
     RESULT.fromstring(bytes[0:2])
     RESULT.fromstring(struct.pack('<h', n_sections))
@@ -144,7 +114,7 @@ def strip(input_file, out_file):
             this_start = SECTION_HEADERS_START + section_i * SECTION_HEADER_SIZE
             RESULT.fromstring(bytes[this_start : this_start + 16])
             ptr_to_raw_data, ptr_to_relocations = section
-            if (ptr_to_raw_data > 0):
+            if ptr_to_raw_data > 0:
                 RESULT.fromstring(bytes[this_start + 16: this_start + 20])
             else:
                 RESULT.fromstring(struct.pack('<I', 0))
