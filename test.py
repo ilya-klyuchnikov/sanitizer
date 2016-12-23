@@ -1,7 +1,7 @@
 import coff
 import subprocess
 import shutil
-import os
+import sys
 
 # currently I assume SDK 10.0.10586.0
 # TODO - generalize to test with different versions
@@ -24,11 +24,6 @@ INCLUDE_FLAGS = [
 CL_EXE = "C:\\Program Files (x86)\\Microsoft Visual Studio 14.0\\VC\\bin\\amd64\\cl.exe"
 LIB_EXE = "C:\\Program Files (x86)\\Microsoft Visual Studio 14.0\\VC\\bin\\amd64\\lib.exe"
 LINK_EXE = "C:\\Program Files (x86)\\Microsoft Visual Studio 14.0\\VC\\bin\\amd64\\link.exe"
-
-FLAGS = [
-    [],
-    ['/Zi']
-]
 
 VERBOSE = False
 TEST = True
@@ -139,8 +134,27 @@ def copy_expected(i, projects, name):
 
 
 def build():
+    FLAGS = [
+        [],
+        ['/Zi'],
+        ['/ZI'],
+        ['/Z7'],
+        ['/Gm', '/Zi'],
+        ['/Gm', '/ZI'],
+        # wrong assumption about headers
+        # ['/GL'],
+        ['/GR'],
+        ['/Gw'],
+        ['/Gy'],
+        ['/X'],
+        ['/O1'],
+        ['/O2'],
+        ['/Od'],
+        ['/Oi'],
+        ['/Os'],
+        ['/Ot'],
 
-
+    ]
 
     files = [
         ('main', 'c'),
@@ -149,20 +163,24 @@ def build():
     ]
 
     shutil.rmtree('tmp', ignore_errors=True)
+    # import os
     #os.makedirs('testdata/expected')
 
     for i in range(0, len(FLAGS)):
         flags = FLAGS[i]
+        print '================== {0} =================='.format(flags)
 
         projects = [
-            'tmp/{0}/p1'.format(i),
-            'tmp/{0}/p2'.format(i),
+            'tmp/{0}/1'.format(i),
+            'tmp/{0}/long_dir/long_dir/long_dir/long_dir/long_dir/long_dir/long_dir/long_dir/long_dir'.format(i),
         ]
 
         shutil.copytree('testdata/src', projects[0])
         shutil.copytree('testdata/src', projects[1])
 
         for f, ext in files:
+            print 'FILE: {0}.{1}, OPTIONS: {2}'.format(f, ext, flags)
+            sys.stdout.flush()
             build_obj(projects, f, ext, flags)
             link_dll(projects, f)
             make_lib(projects, f)
