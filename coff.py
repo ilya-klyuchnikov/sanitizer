@@ -16,7 +16,7 @@ IMAGE_SCN_MEM_DISCARDABLE = 0x02000000
 IMAGE_SCN_LNK_COMDAT = 0x00001000
 # https://docs.python.org/2/library/struct.html
 
-SYMBOL_SYZE = 18
+SYMBOL_SIZE = 18
 
 
 def strip(input_file, out_file):
@@ -87,7 +87,7 @@ def strip(input_file, out_file):
     aux_symbols = 0
     removing_symbol = False
     for i in range(0, number_of_symbols):
-        start = pointer_to_symbol_table + SYMBOL_SYZE * i
+        start = pointer_to_symbol_table + SYMBOL_SIZE * i
         if aux_symbols == 0:
             aux_symbols, = struct.unpack_from('<B', bytes, start + 17)
             section, = struct.unpack_from('<h', bytes, start + 12)
@@ -139,7 +139,7 @@ def strip(input_file, out_file):
     removing_symbol = False
     # repacking symbol table now
     for i in range(0, number_of_symbols):
-        start = pointer_to_symbol_table + SYMBOL_SYZE * i
+        start = pointer_to_symbol_table + SYMBOL_SIZE * i
         if aux_symbols == 0:
             aux_symbols, = struct.unpack_from('<B', bytes, start + 17)
             section, = struct.unpack_from('<h', bytes, start + 12)
@@ -155,21 +155,21 @@ def strip(input_file, out_file):
                 RESULT.fromstring(bytes[start : start + 12])
                 RESULT.fromstring(struct.pack('<h', new_section))
                 # everything after section
-                RESULT.fromstring(bytes[start + 14 : start + SYMBOL_SYZE])
+                RESULT.fromstring(bytes[start + 14 : start + SYMBOL_SIZE])
             else:
                 removing_symbol = False
-                RESULT.fromstring(bytes[start : start + SYMBOL_SYZE])
+                RESULT.fromstring(bytes[start : start + SYMBOL_SIZE])
         else:
             aux_symbols -= 1
             if removing_symbol:
                 print "PROCESSING AUX SYMBOL"
                 RESULT.fromstring(str(bytearray(18)))
             else:
-                RESULT.fromstring(bytes[start : start + SYMBOL_SYZE])
+                RESULT.fromstring(bytes[start : start + SYMBOL_SIZE])
 
 
     # string section
-    RESULT.fromstring(bytes[pointer_to_symbol_table + SYMBOL_SYZE * number_of_symbols:])
+    RESULT.fromstring(bytes[pointer_to_symbol_table + SYMBOL_SIZE * number_of_symbols:])
 
     ofile = open(out_file, 'wb')
     RESULT.tofile(ofile)
