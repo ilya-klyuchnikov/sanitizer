@@ -8,6 +8,10 @@ Usage: `python coff.py input.obj output.obj`.
 
 ## Subtleties
 
-`coff.py` for now doesn't work with any options across different machines (eg. it doesn't work with `/Zi` option).
+Some details may depend not only on a name of a dir of a project in filesystem, but also on a length of a path.
 
-TODO: investigate a set of options for which `coff.py` works across different machines.
+## TODO
+
+- more tests for different directories (long/short paths) and different options
+- describe assertions
+- store exceptions
