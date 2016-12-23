@@ -1,6 +1,7 @@
 import coff
 import subprocess
 import shutil
+import os
 
 # currently I assume SDK 10.0.10586.0
 # TODO - generalize to test with different versions
@@ -30,7 +31,7 @@ FLAGS = [
 ]
 
 VERBOSE = False
-TEST = False
+TEST = True
 
 
 def verbose(msg):
@@ -38,7 +39,7 @@ def verbose(msg):
         print msg
 
 
-def build_obj(projects, name, extension):
+def build_obj(projects, name, extension, extra_flags):
     """builds 2 obj files"""
     for project in projects:
         flags = [
@@ -48,7 +49,7 @@ def build_obj(projects, name, extension):
             '/Fo:{0}/{1}.obj'.format(project, name),
             '{0}/{1}.{2}'.format(project, name, extension),
         ]
-        command = [CL_EXE] + INCLUDE_FLAGS + flags
+        command = [CL_EXE] + INCLUDE_FLAGS + flags + extra_flags
         verbose(command)
         result = subprocess.call(command)
         assert result == 0
@@ -123,7 +124,7 @@ def check_the_same(projects, name):
 
 def check_expected(i, projects, name):
     n1 = '{0}/{1}-stripped.obj'.format(projects[0], name)
-    n2 = 'testdata/expected/{0}/{1}-stripped.obj'.format(i, name)
+    n2 = 'testdata/expected/{0}_{1}-stripped.obj'.format(i, name)
     the_same = compare_files(n1, n2)
     if TEST:
         assert the_same, name
@@ -139,6 +140,8 @@ def copy_expected(i, projects, name):
 
 def build():
 
+
+
     files = [
         ('main', 'c'),
         ('main1', 'cpp'),
@@ -146,6 +149,7 @@ def build():
     ]
 
     shutil.rmtree('tmp', ignore_errors=True)
+    #os.makedirs('testdata/expected')
 
     for i in range(0, len(FLAGS)):
         flags = FLAGS[i]
@@ -159,15 +163,15 @@ def build():
         shutil.copytree('testdata/src', projects[1])
 
         for f, ext in files:
-            build_obj(projects, f, ext)
+            build_obj(projects, f, ext, flags)
             link_dll(projects, f)
             make_lib(projects, f)
             strip(projects, f)
             check_diff(projects, f)
             check_the_same(projects, f)
             link_dll(projects, f + '-stripped')
-            #check_expected(i, projects, f)
-            copy_expected(i, projects, f)
+            check_expected(i, projects, f)
+            #copy_expected(i, projects, f)
 
 # the main stuff
 build()

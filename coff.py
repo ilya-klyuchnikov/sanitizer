@@ -18,6 +18,7 @@ IMAGE_SCN_LNK_COMDAT = 0x00001000
 
 SYMBOL_SIZE = 18
 
+REMOVE_RELOCATIONS = False
 
 def strip(input_file, out_file):
 
@@ -61,8 +62,13 @@ def strip(input_file, out_file):
         size_of_raw_data, = struct.unpack_from('<I', bytes, this_start + 16)
         ptr_to_raw_data, = struct.unpack_from('<I', bytes, this_start + 20)
         ptr_to_relocations, = struct.unpack_from('<I', bytes, this_start + 24)
+        # 5.3. COFF Line Numbers (Deprecated)
+        # COFF line numbers are no longer produced and, in the future, will not be consumed.
+        # TODO - check that this is 0
         ptr_to_line_numbers, = struct.unpack_from('<I', bytes, this_start + 28)
+
         number_of_relocations, = struct.unpack_from('<h', bytes, this_start + 32)
+        # we assert no line number for now!
         number_of_line_numbers, = struct.unpack_from('<h', bytes, this_start + 34)
         sec_characteristics, = struct.unpack_from('<I', bytes, this_start + 36)
 
@@ -76,9 +82,11 @@ def strip(input_file, out_file):
             if size_of_raw_data > 0:
                 removed_pieces.append((ptr_to_raw_data, size_of_raw_data))
                 max_removed = max(max_removed, ptr_to_raw_data + size_of_raw_data)
+            if number_of_relocations > 0:
+                removed_pieces.append((ptr_to_relocations, number_of_relocations * RELOCATION_SIZE))
 
         if to_strip:
-            removed_bytes = removed_bytes + size_of_raw_data #+ (number_of_relocations * RELOCATION_SIZE)
+            removed_bytes = removed_bytes + size_of_raw_data + (number_of_relocations * RELOCATION_SIZE)
             sections.append((0, max(ptr_to_relocations - removed_bytes, 0)))
         else:
             sections.append((max(ptr_to_raw_data - removed_bytes, 0), max(ptr_to_relocations - removed_bytes, 0)))
@@ -118,10 +126,17 @@ def strip(input_file, out_file):
                 RESULT.fromstring(bytes[this_start + 16: this_start + 20])
             else:
                 RESULT.fromstring(struct.pack('<I', 0))
-
+            # 20 ptr_to_raw_data
             RESULT.fromstring(struct.pack('<I', ptr_to_raw_data))
+            # 24 ptr_to_relocations
             RESULT.fromstring(struct.pack('<I', ptr_to_relocations))
-            RESULT.fromstring(bytes[this_start + 28 : this_start + 40])
+            # 28 - ptr_to_line_numbers
+            RESULT.fromstring(bytes[this_start + 28: this_start + 32])
+            if ptr_to_relocations > 0:
+                RESULT.fromstring(bytes[this_start + 32: this_start + 34])
+            else:
+                RESULT.fromstring(struct.pack('<h', 0))
+            RESULT.fromstring(bytes[this_start + 34 : this_start + 40])
 
     def stripped(i):
         for start, size in removed_pieces:
