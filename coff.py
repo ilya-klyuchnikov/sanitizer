@@ -129,6 +129,32 @@ def write_data(output, data, removed_pieces, begin_index, end_index):
             output.fromstring(data[i])
 
 
+def write_symbol_table(RESULT, data, pointer_to_symbol_table, number_of_symbols, sections_to_strip):
+    aux_symbols = 0
+    removing_symbol = False
+    for i in range(0, number_of_symbols):
+        start = pointer_to_symbol_table + SYMBOL_SIZE * i
+        if aux_symbols == 0:
+            aux_symbols, = struct.unpack_from('<B', data, start + 17)
+            section, = struct.unpack_from('<h', data, start + 12)
+            if section > 0:
+                removing_symbol = (section - 1) in sections_to_strip
+                RESULT.fromstring(data[start : start + 12])
+                RESULT.fromstring(struct.pack('<h', section))
+                # everything after section
+                RESULT.fromstring(data[start + 14 : start + SYMBOL_SIZE])
+            else:
+                removing_symbol = False
+                RESULT.fromstring(data[start : start + SYMBOL_SIZE])
+        else:
+            aux_symbols -= 1
+            if removing_symbol:
+                print 'PROCESSING AUX SYMBOL'
+                RESULT.fromstring(str(bytearray(18)))
+            else:
+                RESULT.fromstring(data[start : start + SYMBOL_SIZE])
+
+
 def strip(input_file, out_file):
     """
     Strips a COFF file produced by a MSVC compiler, removing non-deterministic information.
@@ -177,31 +203,7 @@ def strip(input_file, out_file):
     write_file_header(RESULT, data, number_of_sections, pointer_to_symbol_table - removed_bytes, number_of_symbols)
     write_section_headers(RESULT, data, sections, number_of_sections)
     write_data(RESULT, data, removed_pieces, SECTION_HEADERS_START + number_of_sections*SECTION_HEADER_SIZE, pointer_to_symbol_table)
-
-    aux_symbols = 0
-    removing_symbol = False
-    # copying symbol table
-    for i in range(0, number_of_symbols):
-        start = pointer_to_symbol_table + SYMBOL_SIZE * i
-        if aux_symbols == 0:
-            aux_symbols, = struct.unpack_from('<B', data, start + 17)
-            section, = struct.unpack_from('<h', data, start + 12)
-            if section > 0:
-                removing_symbol = (section - 1) in sections_to_strip
-                RESULT.fromstring(data[start : start + 12])
-                RESULT.fromstring(struct.pack('<h', section))
-                # everything after section
-                RESULT.fromstring(data[start + 14 : start + SYMBOL_SIZE])
-            else:
-                removing_symbol = False
-                RESULT.fromstring(data[start : start + SYMBOL_SIZE])
-        else:
-            aux_symbols -= 1
-            if removing_symbol:
-                print "PROCESSING AUX SYMBOL"
-                RESULT.fromstring(str(bytearray(18)))
-            else:
-                RESULT.fromstring(data[start : start + SYMBOL_SIZE])
+    write_symbol_table(RESULT, data, pointer_to_symbol_table, number_of_symbols, sections_to_strip)
 
     # copying string section of symbol table
     RESULT.fromstring(data[pointer_to_symbol_table + SYMBOL_SIZE * number_of_symbols:])
