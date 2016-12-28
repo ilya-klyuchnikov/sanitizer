@@ -95,7 +95,7 @@ class FileHeader(object):
         output.fromstring(
             struct.pack(NUMBER_OF_SECTIONS_FORMAT, self.number_of_sections))
         output.fromstring(
-            struct.pack(TIME_DATE_STAMP_FORMAT, 0)) # SIC
+            struct.pack(TIME_DATE_STAMP_FORMAT, self.time_date_stamp)) # SIC
         output.fromstring(
             struct.pack(POINTER_TO_SYMBOL_TABLE_FORMAT, self.pointer_to_symbol_table - removed_bytes))
         output.fromstring(
@@ -239,6 +239,9 @@ def strip(input_file, out_file):
     # section mapping - old -> new (zero based)
     sections_to_strip = find_sections_to_strip(data, header.number_of_sections)
     sections, removed_pieces, removed_bytes = process(data, header.number_of_sections, sections_to_strip)
+
+    header.time_date_stamp = 0
+    #header.pointer_to_symbol_table = header.pointer_to_symbol_table - removed_bytes
 
     header.write(
         RESULT,
