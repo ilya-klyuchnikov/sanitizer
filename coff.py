@@ -128,6 +128,7 @@ def process(data, number_of_sections, sections_to_strip):
     sections = []
     removed_pieces = []
     removed_bytes = 0
+    to_copy = []
     for section_i in range(0, number_of_sections):
         this_start = SECTION_HEADERS_START + section_i * SECTION_HEADER_SIZE
         size_of_raw_data, = struct.unpack_from('<I', data, this_start + 16)
@@ -143,19 +144,26 @@ def process(data, number_of_sections, sections_to_strip):
         number_of_line_numbers, = struct.unpack_from('<h', data, this_start + 34)
         assert number_of_line_numbers == 0
 
+        size_of_relocations = number_of_relocations * RELOCATION_SIZE
         if section_i in sections_to_strip:
             if size_of_raw_data > 0:
                 removed_pieces.append((ptr_to_raw_data, size_of_raw_data))
             if number_of_relocations > 0:
-                removed_pieces.append((ptr_to_relocations, number_of_relocations * RELOCATION_SIZE))
+                removed_pieces.append((ptr_to_relocations, size_of_relocations))
 
         if section_i in sections_to_strip:
-            removed_bytes = removed_bytes + size_of_raw_data + (number_of_relocations * RELOCATION_SIZE)
+            removed_bytes = removed_bytes + size_of_raw_data + (size_of_relocations)
             sections.append((0, 0))
         else:
             sections.append((max(ptr_to_raw_data - removed_bytes, 0), max(ptr_to_relocations - removed_bytes, 0)))
 
-    return sections, removed_pieces, removed_bytes
+        if section_i not in sections_to_strip:
+            if size_of_raw_data > 0 and ptr_to_raw_data > 0:
+                to_copy.append((ptr_to_raw_data, ptr_to_raw_data + size_of_raw_data))
+            if number_of_relocations > 0:
+                to_copy.append((ptr_to_relocations, ptr_to_relocations + size_of_relocations))
+
+    return sections, removed_pieces, removed_bytes, to_copy
 
 
 def write_section_headers(output, data, sections, number_of_sections):
@@ -182,16 +190,30 @@ def write_section_headers(output, data, sections, number_of_sections):
             output.fromstring(data[this_start + 34 : this_start + 40])
 
 
-def write_data(output, data, removed_pieces, begin_index, end_index):
+def write_data(output, data, removed_pieces, begin_index, end_index, to_copy):
     def stripped(i):
         for start, size in removed_pieces:
             if start <= i < start + size:
                 return True
         return False
 
+    def copied(i):
+        for start, end in to_copy:
+            if start <= i < end:
+                return True
+        return False
+
     for i in range(begin_index, end_index):
         if not stripped(i):
             output.fromstring(data[i])
+        assert stripped(i) == (not copied(i)), '{0}, {1}, {2}, {3} ======= {4}'.format(i, stripped(0), copied(i), removed_pieces, to_copy)
+
+    sorted_to_copy = sorted(to_copy, key=lambda tup: tup[0])
+
+    assert sorted_to_copy == to_copy, '{0} != {1}'.format(to_copy, sorted_to_copy)
+
+    # for x, y in to_copy:
+    #     output.fromstring(data[x:y])
 
 
 def write_symbol_table(RESULT, data, pointer_to_symbol_table, number_of_symbols, sections_to_strip):
@@ -232,7 +254,7 @@ def strip(input_file, out_file):
 
     old_pointer_to_symbol_table = header.pointer_to_symbol_table
     sections_to_strip = find_sections_to_strip(data, header.number_of_sections)
-    sections, removed_pieces, removed_bytes = process(data, header.number_of_sections, sections_to_strip)
+    sections, removed_pieces, removed_bytes, to_copy = process(data, header.number_of_sections, sections_to_strip)
 
     header.time_date_stamp = 0
     header.pointer_to_symbol_table -= removed_bytes
@@ -249,7 +271,8 @@ def strip(input_file, out_file):
         data,
         removed_pieces,
         SECTION_HEADERS_START + header.number_of_sections*SECTION_HEADER_SIZE,
-        old_pointer_to_symbol_table)
+        old_pointer_to_symbol_table,
+        to_copy)
     write_symbol_table(
         RESULT,
         data,
