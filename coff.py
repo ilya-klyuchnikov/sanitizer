@@ -2,17 +2,29 @@ import struct
 import array
 
 # 3.3. COFF File Header (Object and Image)
+MACHINE_OFFSET = 0
+MACHINE_FORMAT = '<h'
+
 NUMBER_OF_SECTIONS_OFFSET = 2
 NUMBER_OF_SECTIONS_FORMAT = '<h'
+
+TIME_DATE_STAMP_OFFSET = 6
+TIME_DATE_STAMP_FORMAT = '<I'
+
 POINTER_TO_SYMBOL_TABLE_OFFSET = 8
 POINTER_TO_SYMBOL_TABLE_FORMAT = '<I'
+
 NUMBER_OF_SYMBOLS_OFFSET = 12
 NUMBER_OF_SYMBOLS_FORMAT = '<I'
+
 SIZE_OF_OPTIONAL_HEADER_OFFSET = 16
 SIZE_OF_OPTIONAL_HEADER_FORMAT = '<h'
+
+CHARACTERISTICS_OFFSET = 18
+CHARACTERISTICS_FORMAT = '<h'
+
 # COFF File Header
 COFF_FILE_HEADER_SIZE = 20
-
 
 # 4. Section Table (Section Headers)
 SECTION_HEADERS_START = 20
@@ -29,6 +41,53 @@ IMAGE_SCN_LNK_COMDAT = 0x00001000
 
 SYMBOL_SIZE = 18
 
+
+class FileHeader(object):
+    def __init__(self, data):
+        self.machine, = struct.unpack_from(
+            MACHINE_FORMAT,
+            data,
+            MACHINE_OFFSET
+        )
+
+        self.number_of_sections, = struct.unpack_from(
+            NUMBER_OF_SECTIONS_FORMAT,
+            data,
+            NUMBER_OF_SECTIONS_OFFSET
+        )
+
+        self.time_date_stamp, = struct.unpack_from(
+            TIME_DATE_STAMP_FORMAT,
+            data,
+            TIME_DATE_STAMP_OFFSET
+        )
+
+        self.pointer_to_symbol_table, = struct.unpack_from(
+            POINTER_TO_SYMBOL_TABLE_FORMAT,
+            data,
+            POINTER_TO_SYMBOL_TABLE_OFFSET
+        )
+
+        self.number_of_symbols, = struct.unpack_from(
+            NUMBER_OF_SYMBOLS_FORMAT,
+            data,
+            NUMBER_OF_SYMBOLS_OFFSET
+        )
+
+        self.size_of_optional_header, = struct.unpack_from(
+            SIZE_OF_OPTIONAL_HEADER_FORMAT,
+            data,
+            SIZE_OF_OPTIONAL_HEADER_OFFSET
+        )
+
+        self.characteristics, = struct.unpack_from(
+            CHARACTERISTICS_FORMAT,
+            data,
+            CHARACTERISTICS_OFFSET
+        )
+
+        # /GL compilation is not supported
+        assert self.size_of_optional_header == 0
 
 def should_strip_section(sec_characteristics):
     # IMAGE_SCN_LNK_COMDAT - debug$S may have IMAGE_SCN_LNK_COMDAT for imported functions
@@ -167,47 +226,41 @@ def strip(input_file, out_file):
 
     RESULT = array.array('b')
 
-    number_of_sections, = struct.unpack_from(
-        NUMBER_OF_SECTIONS_FORMAT,
-        data,
-        NUMBER_OF_SECTIONS_OFFSET
-    )
-
-    pointer_to_symbol_table, = struct.unpack_from(
-        POINTER_TO_SYMBOL_TABLE_FORMAT,
-        data,
-        POINTER_TO_SYMBOL_TABLE_OFFSET
-    )
-
-    number_of_symbols, = struct.unpack_from(
-        NUMBER_OF_SYMBOLS_FORMAT,
-        data,
-        NUMBER_OF_SYMBOLS_OFFSET
-    )
-
-    size_of_optional_header, = struct.unpack_from(
-        SIZE_OF_OPTIONAL_HEADER_FORMAT,
-        data,
-        SIZE_OF_OPTIONAL_HEADER_OFFSET
-    )
-
-    # /GL compilation is not supported
-    assert size_of_optional_header == 0
-
+    header = FileHeader(data)
     # sorted_by_second = sorted(data, key=lambda tup: tup[1])
 
     # section mapping - old -> new (zero based)
-    sections_to_strip = find_sections_to_strip(data, number_of_sections)
-    sections, removed_pieces, removed_bytes = process(data, number_of_sections, sections_to_strip)
+    sections_to_strip = find_sections_to_strip(data, header.number_of_sections)
+    sections, removed_pieces, removed_bytes = process(data, header.number_of_sections, sections_to_strip)
 
-    write_file_header(RESULT, data, number_of_sections, pointer_to_symbol_table - removed_bytes, number_of_symbols)
-    write_section_headers(RESULT, data, sections, number_of_sections)
-    write_data(RESULT, data, removed_pieces, SECTION_HEADERS_START + number_of_sections*SECTION_HEADER_SIZE, pointer_to_symbol_table)
-    write_symbol_table(RESULT, data, pointer_to_symbol_table, number_of_symbols, sections_to_strip)
+    write_file_header(
+        RESULT,
+        data,
+        header.number_of_sections,
+        header.pointer_to_symbol_table - removed_bytes,
+        header.number_of_symbols)
+    write_section_headers(
+        RESULT,
+        data,
+        sections,
+        header.number_of_sections)
+    write_data(
+        RESULT,
+        data,
+        removed_pieces,
+        SECTION_HEADERS_START + header.number_of_sections*SECTION_HEADER_SIZE,
+        header.pointer_to_symbol_table)
+    write_symbol_table(
+        RESULT,
+        data,
+        header.pointer_to_symbol_table,
+        header.number_of_symbols,
+        sections_to_strip)
 
     # copying string section of symbol table
-    RESULT.fromstring(data[pointer_to_symbol_table + SYMBOL_SIZE * number_of_symbols:])
+    RESULT.fromstring(
+        data[header.pointer_to_symbol_table + SYMBOL_SIZE * header.number_of_symbols:]
+    )
 
-    ofile = open(out_file, 'wb')
-    RESULT.tofile(ofile)
-    ofile.close()
+    with open(out_file, 'wb') as ofile:
+        RESULT.tofile(ofile)
