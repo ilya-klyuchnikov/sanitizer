@@ -10,13 +10,16 @@ NUMBER_OF_SYMBOLS_OFFSET = 12
 NUMBER_OF_SYMBOLS_FORMAT = '<I'
 SIZE_OF_OPTIONAL_HEADER_OFFSET = 16
 SIZE_OF_OPTIONAL_HEADER_FORMAT = '<h'
-
 # COFF File Header
 COFF_FILE_HEADER_SIZE = 20
-SECTION_HEADERS_START = 20
+
 
 # 4. Section Table (Section Headers)
+SECTION_HEADERS_START = 20
 SECTION_HEADER_SIZE = 40
+SECTION_HEADER_CHARACTERISTICS_OFFSET = 36
+SECTION_HEADER_CHARACTERISTICS_FORMAT = '<I'
+
 # 5.2. COFF Relocations (Object Only)
 RELOCATION_SIZE = 10
 # see spec
@@ -25,6 +28,27 @@ IMAGE_SCN_LNK_COMDAT = 0x00001000
 # https://docs.python.org/2/library/struct.html
 
 SYMBOL_SIZE = 18
+
+
+def should_strip_section(sec_characteristics):
+    # IMAGE_SCN_LNK_COMDAT - debug$S may have IMAGE_SCN_LNK_COMDAT for imported functions
+    return (sec_characteristics & IMAGE_SCN_MEM_DISCARDABLE != 0) and (sec_characteristics & IMAGE_SCN_LNK_COMDAT == 0)
+
+
+def remap_sections(bytes, number_of_sections):
+    mapping = {}
+    removed_sections = 0
+    for section_i in range(0, number_of_sections):
+        this_start = SECTION_HEADERS_START + section_i * SECTION_HEADER_SIZE
+        sec_characteristics, = struct.unpack_from(
+            SECTION_HEADER_CHARACTERISTICS_FORMAT,
+            bytes,
+            this_start + SECTION_HEADER_CHARACTERISTICS_OFFSET
+        )
+
+        if not should_strip_section(sec_characteristics):
+            mapping[section_i] = section_i - removed_sections
+    return mapping
 
 
 def strip(input_file, out_file):
@@ -38,14 +62,32 @@ def strip(input_file, out_file):
     bytes = ifile.read()
     ifile.close()
 
-    n_sections, = struct.unpack_from('<h', bytes, 2)
-    pointer_to_symbol_table, = struct.unpack_from('<I', bytes, 8)
-    number_of_symbols, = struct.unpack_from('<I', bytes, 12)
-    size_of_optional_header, = struct.unpack_from('<h', bytes, 16)
+    number_of_sections, = struct.unpack_from(
+        NUMBER_OF_SECTIONS_FORMAT,
+        bytes,
+        NUMBER_OF_SECTIONS_OFFSET
+    )
 
+    pointer_to_symbol_table, = struct.unpack_from(
+        POINTER_TO_SYMBOL_TABLE_FORMAT,
+        bytes,
+        POINTER_TO_SYMBOL_TABLE_OFFSET
+    )
+
+    number_of_symbols, = struct.unpack_from(
+        NUMBER_OF_SYMBOLS_FORMAT,
+        bytes,
+        NUMBER_OF_SYMBOLS_OFFSET
+    )
+
+    size_of_optional_header, = struct.unpack_from(
+        SIZE_OF_OPTIONAL_HEADER_FORMAT,
+        bytes,
+        SIZE_OF_OPTIONAL_HEADER_OFFSET)
+
+    # /GL compilation is not supported
     assert size_of_optional_header == 0
 
-    removed_sections = 0
     # an array of tuples - (start, size)
     removed_pieces = []
 
@@ -54,24 +96,12 @@ def strip(input_file, out_file):
     removed_bytes = 0
     sections = []
     max_removed = 0
+
     # section mapping - old -> new (zero based)
-    mapping = {}
+    mapping = remap_sections(bytes, number_of_sections)
 
-    for section_i in range(0, n_sections):
+    for section_i in range(0, number_of_sections):
         this_start = SECTION_HEADERS_START + section_i * SECTION_HEADER_SIZE
-        sec_characteristics, = struct.unpack_from('<I', bytes, this_start + 36)
-        # IMAGE_SCN_LNK_COMDAT - debug$S may have IMAGE_SCN_LNK_COMDAT for imported functions
-        to_strip = (sec_characteristics & IMAGE_SCN_MEM_DISCARDABLE != 0) and (sec_characteristics & IMAGE_SCN_LNK_COMDAT == 0)
-
-        if not to_strip:
-            mapping[section_i] = section_i - removed_sections
-        else:
-            removed_sections += 1
-            #removed_bytes += SECTION_HEADER_SIZE
-
-    for section_i in range(0, n_sections):
-        this_start = SECTION_HEADERS_START + section_i * SECTION_HEADER_SIZE
-        name = bytes[this_start : this_start + 8]
         size_of_raw_data, = struct.unpack_from('<I', bytes, this_start + 16)
         ptr_to_raw_data, = struct.unpack_from('<I', bytes, this_start + 20)
         ptr_to_relocations, = struct.unpack_from('<I', bytes, this_start + 24)
@@ -86,7 +116,7 @@ def strip(input_file, out_file):
         sec_characteristics, = struct.unpack_from('<I', bytes, this_start + 36)
 
         # is this enough?
-        to_strip = (sec_characteristics & IMAGE_SCN_MEM_DISCARDABLE != 0) and (sec_characteristics & IMAGE_SCN_LNK_COMDAT == 0)
+        to_strip = should_strip_section(sec_characteristics)
 
         if ptr_to_relocations > 0:
             assert ptr_to_relocations >= max_removed
@@ -123,13 +153,13 @@ def strip(input_file, out_file):
 
     RESULT = array.array('b')
     RESULT.fromstring(bytes[0:2])
-    RESULT.fromstring(struct.pack('<h', n_sections))
+    RESULT.fromstring(struct.pack('<h', number_of_sections))
     RESULT.fromstring(struct.pack('<I', 0))
     RESULT.fromstring(struct.pack('<I', pointer_to_symbol_table - removed_bytes))
     RESULT.fromstring(struct.pack('<I', number_of_symbols))
     RESULT.fromstring(bytes[16:20])
 
-    for section_i in range(0, n_sections):
+    for section_i in range(0, number_of_sections):
         section = sections[section_i]
         if section:
             this_start = SECTION_HEADERS_START + section_i * SECTION_HEADER_SIZE
@@ -157,7 +187,7 @@ def strip(input_file, out_file):
                 return True
         return False
 
-    for i in range(SECTION_HEADERS_START + n_sections*SECTION_HEADER_SIZE, pointer_to_symbol_table):
+    for i in range(SECTION_HEADERS_START + number_of_sections*SECTION_HEADER_SIZE, pointer_to_symbol_table):
         if stripped(i):
             pass
         else:
