@@ -35,12 +35,12 @@ def should_strip_section(sec_characteristics):
     return (sec_characteristics & IMAGE_SCN_MEM_DISCARDABLE != 0) and (sec_characteristics & IMAGE_SCN_LNK_COMDAT == 0)
 
 
-def find_sections_to_strip(bytes, number_of_sections):
+def find_sections_to_strip(data, number_of_sections):
     sections = []
     for section_i in range(0, number_of_sections):
         sec_characteristics, = struct.unpack_from(
             SECTION_HEADER_CHARACTERISTICS_FORMAT,
-            bytes,
+            data,
             SECTION_HEADERS_START + (section_i * SECTION_HEADER_SIZE) + SECTION_HEADER_CHARACTERISTICS_OFFSET
         )
         if should_strip_section(sec_characteristics):
@@ -48,25 +48,25 @@ def find_sections_to_strip(bytes, number_of_sections):
     return set(sections)
 
 
-def process(bytes, number_of_sections, sections_to_strip):
+def process(data, number_of_sections, sections_to_strip):
     sections = []
     removed_pieces = []
     removed_bytes = 0
     for section_i in range(0, number_of_sections):
         this_start = SECTION_HEADERS_START + section_i * SECTION_HEADER_SIZE
-        size_of_raw_data, = struct.unpack_from('<I', bytes, this_start + 16)
-        ptr_to_raw_data, = struct.unpack_from('<I', bytes, this_start + 20)
-        ptr_to_relocations, = struct.unpack_from('<I', bytes, this_start + 24)
+        size_of_raw_data, = struct.unpack_from('<I', data, this_start + 16)
+        ptr_to_raw_data, = struct.unpack_from('<I', data, this_start + 20)
+        ptr_to_relocations, = struct.unpack_from('<I', data, this_start + 24)
         # 5.3. COFF Line Numbers (Deprecated)
         # COFF line numbers are no longer produced and, in the future, will not be consumed.
 
-        ptr_to_line_numbers, = struct.unpack_from('<I', bytes, this_start + 28)
+        ptr_to_line_numbers, = struct.unpack_from('<I', data, this_start + 28)
         assert ptr_to_line_numbers == 0
 
-        number_of_relocations, = struct.unpack_from('<h', bytes, this_start + 32)
+        number_of_relocations, = struct.unpack_from('<h', data, this_start + 32)
         # we assert no line number for now!
         # TODO - check that this is 0
-        number_of_line_numbers, = struct.unpack_from('<h', bytes, this_start + 34)
+        number_of_line_numbers, = struct.unpack_from('<h', data, this_start + 34)
         assert number_of_line_numbers == 0
 
         if section_i in sections_to_strip:
@@ -84,26 +84,6 @@ def process(bytes, number_of_sections, sections_to_strip):
     return sections, removed_pieces, removed_bytes
 
 
-def calculate_removed_symbols(bytes, number_of_symbols, pointer_to_symbol_table, sections_to_strip):
-    removed_symbols = 0
-    removing_symbol = False
-    aux_symbols = 0
-    for i in range(0, number_of_symbols):
-        start = pointer_to_symbol_table + SYMBOL_SIZE * i
-        if aux_symbols == 0:
-            aux_symbols, = struct.unpack_from('<B', bytes, start + 17)
-            section, = struct.unpack_from('<h', bytes, start + 12)
-            if section > 0:
-                removing_symbol = (section - 1) in sections_to_strip
-                if removing_symbol:
-                    removed_symbols += 1
-        else:
-            aux_symbols -= 1
-            if removing_symbol:
-                removed_symbols += 1
-    return removed_symbols
-
-
 def strip(input_file, out_file):
     """
     Strips a COFF file produced by a MSVC compiler, removing non-deterministic information.
@@ -112,30 +92,30 @@ def strip(input_file, out_file):
     # http://www.microsoft.com/whdc/system/platform/firmware/PECOFF.mspx
 
     ifile = open(input_file, 'rb')
-    bytes = ifile.read()
+    data = ifile.read()
     ifile.close()
 
     number_of_sections, = struct.unpack_from(
         NUMBER_OF_SECTIONS_FORMAT,
-        bytes,
+        data,
         NUMBER_OF_SECTIONS_OFFSET
     )
 
     pointer_to_symbol_table, = struct.unpack_from(
         POINTER_TO_SYMBOL_TABLE_FORMAT,
-        bytes,
+        data,
         POINTER_TO_SYMBOL_TABLE_OFFSET
     )
 
     number_of_symbols, = struct.unpack_from(
         NUMBER_OF_SYMBOLS_FORMAT,
-        bytes,
+        data,
         NUMBER_OF_SYMBOLS_OFFSET
     )
 
     size_of_optional_header, = struct.unpack_from(
         SIZE_OF_OPTIONAL_HEADER_FORMAT,
-        bytes,
+        data,
         SIZE_OF_OPTIONAL_HEADER_OFFSET
     )
 
@@ -145,26 +125,26 @@ def strip(input_file, out_file):
     # sorted_by_second = sorted(data, key=lambda tup: tup[1])
 
     # section mapping - old -> new (zero based)
-    sections_to_strip = find_sections_to_strip(bytes, number_of_sections)
-    sections, removed_pieces, removed_bytes = process(bytes, number_of_sections, sections_to_strip)
+    sections_to_strip = find_sections_to_strip(data, number_of_sections)
+    sections, removed_pieces, removed_bytes = process(data, number_of_sections, sections_to_strip)
 
     RESULT = array.array('b')
 
-    RESULT.fromstring(bytes[0:2])
+    RESULT.fromstring(data[0:2])
     RESULT.fromstring(struct.pack('<h', number_of_sections))
     RESULT.fromstring(struct.pack('<I', 0))
     RESULT.fromstring(struct.pack('<I', pointer_to_symbol_table - removed_bytes))
     RESULT.fromstring(struct.pack('<I', number_of_symbols))
-    RESULT.fromstring(bytes[16:20])
+    RESULT.fromstring(data[16:20])
 
     for section_i in range(0, number_of_sections):
         section = sections[section_i]
         if section:
             this_start = SECTION_HEADERS_START + section_i * SECTION_HEADER_SIZE
-            RESULT.fromstring(bytes[this_start : this_start + 16])
+            RESULT.fromstring(data[this_start : this_start + 16])
             ptr_to_raw_data, ptr_to_relocations = section
             if ptr_to_raw_data > 0:
-                RESULT.fromstring(bytes[this_start + 16: this_start + 20])
+                RESULT.fromstring(data[this_start + 16: this_start + 20])
             else:
                 RESULT.fromstring(struct.pack('<I', 0))
             # 20 ptr_to_raw_data
@@ -172,12 +152,12 @@ def strip(input_file, out_file):
             # 24 ptr_to_relocations
             RESULT.fromstring(struct.pack('<I', ptr_to_relocations))
             # 28 - ptr_to_line_numbers
-            RESULT.fromstring(bytes[this_start + 28: this_start + 32])
+            RESULT.fromstring(data[this_start + 28: this_start + 32])
             if ptr_to_relocations > 0:
-                RESULT.fromstring(bytes[this_start + 32: this_start + 34])
+                RESULT.fromstring(data[this_start + 32: this_start + 34])
             else:
                 RESULT.fromstring(struct.pack('<h', 0))
-            RESULT.fromstring(bytes[this_start + 34 : this_start + 40])
+            RESULT.fromstring(data[this_start + 34 : this_start + 40])
 
     def stripped(i):
         for start, size in removed_pieces:
@@ -190,7 +170,7 @@ def strip(input_file, out_file):
         if stripped(i):
             pass
         else:
-            RESULT.fromstring(bytes[i])
+            RESULT.fromstring(data[i])
 
     aux_symbols = 0
     removing_symbol = False
@@ -198,27 +178,27 @@ def strip(input_file, out_file):
     for i in range(0, number_of_symbols):
         start = pointer_to_symbol_table + SYMBOL_SIZE * i
         if aux_symbols == 0:
-            aux_symbols, = struct.unpack_from('<B', bytes, start + 17)
-            section, = struct.unpack_from('<h', bytes, start + 12)
+            aux_symbols, = struct.unpack_from('<B', data, start + 17)
+            section, = struct.unpack_from('<h', data, start + 12)
             if section > 0:
                 removing_symbol = (section - 1) in sections_to_strip
-                RESULT.fromstring(bytes[start : start + 12])
+                RESULT.fromstring(data[start : start + 12])
                 RESULT.fromstring(struct.pack('<h', section))
                 # everything after section
-                RESULT.fromstring(bytes[start + 14 : start + SYMBOL_SIZE])
+                RESULT.fromstring(data[start + 14 : start + SYMBOL_SIZE])
             else:
                 removing_symbol = False
-                RESULT.fromstring(bytes[start : start + SYMBOL_SIZE])
+                RESULT.fromstring(data[start : start + SYMBOL_SIZE])
         else:
             aux_symbols -= 1
             if removing_symbol:
                 print "PROCESSING AUX SYMBOL"
                 RESULT.fromstring(str(bytearray(18)))
             else:
-                RESULT.fromstring(bytes[start : start + SYMBOL_SIZE])
+                RESULT.fromstring(data[start : start + SYMBOL_SIZE])
 
     # copying string section of symbol table
-    RESULT.fromstring(bytes[pointer_to_symbol_table + SYMBOL_SIZE * number_of_symbols:])
+    RESULT.fromstring(data[pointer_to_symbol_table + SYMBOL_SIZE * number_of_symbols:])
 
     ofile = open(out_file, 'wb')
     RESULT.tofile(ofile)
