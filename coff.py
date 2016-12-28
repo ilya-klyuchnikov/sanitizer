@@ -84,6 +84,51 @@ def process(data, number_of_sections, sections_to_strip):
     return sections, removed_pieces, removed_bytes
 
 
+def write_file_header(output, data, number_of_sections, pointer_to_symbol_table, number_of_symbols):
+    output.fromstring(data[0:2])
+    output.fromstring(struct.pack('<h', number_of_sections))
+    output.fromstring(struct.pack('<I', 0))
+    output.fromstring(struct.pack('<I', pointer_to_symbol_table))
+    output.fromstring(struct.pack('<I', number_of_symbols))
+    output.fromstring(data[16:20])
+
+
+def write_section_headers(output, data, sections, number_of_sections):
+    for section_i in range(0, number_of_sections):
+        section = sections[section_i]
+        if section:
+            this_start = SECTION_HEADERS_START + section_i * SECTION_HEADER_SIZE
+            output.fromstring(data[this_start : this_start + 16])
+            ptr_to_raw_data, ptr_to_relocations = section
+            if ptr_to_raw_data > 0:
+                output.fromstring(data[this_start + 16: this_start + 20])
+            else:
+                output.fromstring(struct.pack('<I', 0))
+            # 20 ptr_to_raw_data
+            output.fromstring(struct.pack('<I', ptr_to_raw_data))
+            # 24 ptr_to_relocations
+            output.fromstring(struct.pack('<I', ptr_to_relocations))
+            # 28 - ptr_to_line_numbers
+            output.fromstring(data[this_start + 28: this_start + 32])
+            if ptr_to_relocations > 0:
+                output.fromstring(data[this_start + 32: this_start + 34])
+            else:
+                output.fromstring(struct.pack('<h', 0))
+            output.fromstring(data[this_start + 34 : this_start + 40])
+
+
+def write_data(output, data, removed_pieces, begin_index, end_index):
+    def stripped(i):
+        for start, size in removed_pieces:
+            if start <= i < start + size:
+                return True
+        return False
+
+    for i in range(begin_index, end_index):
+        if not stripped(i):
+            output.fromstring(data[i])
+
+
 def strip(input_file, out_file):
     """
     Strips a COFF file produced by a MSVC compiler, removing non-deterministic information.
@@ -91,9 +136,10 @@ def strip(input_file, out_file):
     """
     # http://www.microsoft.com/whdc/system/platform/firmware/PECOFF.mspx
 
-    ifile = open(input_file, 'rb')
-    data = ifile.read()
-    ifile.close()
+    with open(input_file, 'rb') as ifile:
+        data = ifile.read()
+
+    RESULT = array.array('b')
 
     number_of_sections, = struct.unpack_from(
         NUMBER_OF_SECTIONS_FORMAT,
@@ -128,49 +174,9 @@ def strip(input_file, out_file):
     sections_to_strip = find_sections_to_strip(data, number_of_sections)
     sections, removed_pieces, removed_bytes = process(data, number_of_sections, sections_to_strip)
 
-    RESULT = array.array('b')
-
-    RESULT.fromstring(data[0:2])
-    RESULT.fromstring(struct.pack('<h', number_of_sections))
-    RESULT.fromstring(struct.pack('<I', 0))
-    RESULT.fromstring(struct.pack('<I', pointer_to_symbol_table - removed_bytes))
-    RESULT.fromstring(struct.pack('<I', number_of_symbols))
-    RESULT.fromstring(data[16:20])
-
-    for section_i in range(0, number_of_sections):
-        section = sections[section_i]
-        if section:
-            this_start = SECTION_HEADERS_START + section_i * SECTION_HEADER_SIZE
-            RESULT.fromstring(data[this_start : this_start + 16])
-            ptr_to_raw_data, ptr_to_relocations = section
-            if ptr_to_raw_data > 0:
-                RESULT.fromstring(data[this_start + 16: this_start + 20])
-            else:
-                RESULT.fromstring(struct.pack('<I', 0))
-            # 20 ptr_to_raw_data
-            RESULT.fromstring(struct.pack('<I', ptr_to_raw_data))
-            # 24 ptr_to_relocations
-            RESULT.fromstring(struct.pack('<I', ptr_to_relocations))
-            # 28 - ptr_to_line_numbers
-            RESULT.fromstring(data[this_start + 28: this_start + 32])
-            if ptr_to_relocations > 0:
-                RESULT.fromstring(data[this_start + 32: this_start + 34])
-            else:
-                RESULT.fromstring(struct.pack('<h', 0))
-            RESULT.fromstring(data[this_start + 34 : this_start + 40])
-
-    def stripped(i):
-        for start, size in removed_pieces:
-            if start <= i < start + size:
-                return True
-        return False
-
-    # copying everything up to the symbol table symbol
-    for i in range(SECTION_HEADERS_START + number_of_sections*SECTION_HEADER_SIZE, pointer_to_symbol_table):
-        if stripped(i):
-            pass
-        else:
-            RESULT.fromstring(data[i])
+    write_file_header(RESULT, data, number_of_sections, pointer_to_symbol_table - removed_bytes, number_of_symbols)
+    write_section_headers(RESULT, data, sections, number_of_sections)
+    write_data(RESULT, data, removed_pieces, SECTION_HEADERS_START + number_of_sections*SECTION_HEADER_SIZE, pointer_to_symbol_table)
 
     aux_symbols = 0
     removing_symbol = False
