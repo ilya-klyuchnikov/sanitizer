@@ -153,7 +153,7 @@ def process(data, number_of_sections, sections_to_strip):
 
         if section_i in sections_to_strip:
             removed_bytes = removed_bytes + size_of_raw_data + (number_of_relocations * RELOCATION_SIZE)
-            sections.append((0, max(ptr_to_relocations - removed_bytes, 0)))
+            sections.append((0, 0))
         else:
             sections.append((max(ptr_to_raw_data - removed_bytes, 0), max(ptr_to_relocations - removed_bytes, 0)))
 
