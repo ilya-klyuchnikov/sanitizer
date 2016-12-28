@@ -48,6 +48,7 @@ def strip(input_file, out_file):
     for section_i in range(0, n_sections):
         this_start = SECTION_HEADERS_START + section_i * SECTION_HEADER_SIZE
         sec_characteristics, = struct.unpack_from('<I', bytes, this_start + 36)
+        # IMAGE_SCN_LNK_COMDAT - debug$S may have IMAGE_SCN_LNK_COMDAT for imported functions
         to_strip = (sec_characteristics & IMAGE_SCN_MEM_DISCARDABLE != 0) and (sec_characteristics & IMAGE_SCN_LNK_COMDAT == 0)
 
         if not to_strip:

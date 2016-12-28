@@ -158,6 +158,7 @@ def build():
 
     files = [
         ('main', 'c'),
+        ('main2', 'c'),
         ('main1', 'cpp'),
         ('test', 'cpp'),
     ]
@@ -168,7 +169,7 @@ def build():
 
     for i in range(0, len(FLAGS)):
         flags = FLAGS[i]
-        print '================== {0} =================='.format(flags)
+        print '================== {0},  =================='.format(flags)
 
         projects = [
             'tmp/{0}/1'.format(i),
