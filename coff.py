@@ -89,6 +89,23 @@ class FileHeader(object):
         # /GL compilation is not supported
         assert self.size_of_optional_header == 0
 
+    def write(self, output, removed_bytes):
+        output.fromstring(
+            struct.pack(MACHINE_FORMAT, self.machine))
+        output.fromstring(
+            struct.pack(NUMBER_OF_SECTIONS_FORMAT, self.number_of_sections))
+        output.fromstring(
+            struct.pack(TIME_DATE_STAMP_FORMAT, 0)) # SIC
+        output.fromstring(
+            struct.pack(POINTER_TO_SYMBOL_TABLE_FORMAT, self.pointer_to_symbol_table - removed_bytes))
+        output.fromstring(
+            struct.pack(NUMBER_OF_SYMBOLS_FORMAT, self.number_of_symbols))
+        output.fromstring(
+            struct.pack(SIZE_OF_OPTIONAL_HEADER_FORMAT, self.size_of_optional_header))
+        output.fromstring(
+            struct.pack(CHARACTERISTICS_FORMAT, self.characteristics))
+
+
 def should_strip_section(sec_characteristics):
     # IMAGE_SCN_LNK_COMDAT - debug$S may have IMAGE_SCN_LNK_COMDAT for imported functions
     return (sec_characteristics & IMAGE_SCN_MEM_DISCARDABLE != 0) and (sec_characteristics & IMAGE_SCN_LNK_COMDAT == 0)
@@ -143,15 +160,6 @@ def process(data, number_of_sections, sections_to_strip):
     return sections, removed_pieces, removed_bytes
 
 
-def write_file_header(output, data, number_of_sections, pointer_to_symbol_table, number_of_symbols):
-    output.fromstring(data[0:2])
-    output.fromstring(struct.pack('<h', number_of_sections))
-    output.fromstring(struct.pack('<I', 0))
-    output.fromstring(struct.pack('<I', pointer_to_symbol_table))
-    output.fromstring(struct.pack('<I', number_of_symbols))
-    output.fromstring(data[16:20])
-
-
 def write_section_headers(output, data, sections, number_of_sections):
     for section_i in range(0, number_of_sections):
         section = sections[section_i]
@@ -200,7 +208,6 @@ def write_symbol_table(RESULT, data, pointer_to_symbol_table, number_of_symbols,
                 removing_symbol = (section - 1) in sections_to_strip
                 RESULT.fromstring(data[start : start + 12])
                 RESULT.fromstring(struct.pack('<h', section))
-                # everything after section
                 RESULT.fromstring(data[start + 14 : start + SYMBOL_SIZE])
             else:
                 removing_symbol = False
@@ -208,7 +215,7 @@ def write_symbol_table(RESULT, data, pointer_to_symbol_table, number_of_symbols,
         else:
             aux_symbols -= 1
             if removing_symbol:
-                print 'PROCESSING AUX SYMBOL'
+                print 'PROCESSING AUX SYMBOL' # making it 00000
                 RESULT.fromstring(str(bytearray(18)))
             else:
                 RESULT.fromstring(data[start : start + SYMBOL_SIZE])
@@ -233,12 +240,9 @@ def strip(input_file, out_file):
     sections_to_strip = find_sections_to_strip(data, header.number_of_sections)
     sections, removed_pieces, removed_bytes = process(data, header.number_of_sections, sections_to_strip)
 
-    write_file_header(
+    header.write(
         RESULT,
-        data,
-        header.number_of_sections,
-        header.pointer_to_symbol_table - removed_bytes,
-        header.number_of_symbols)
+        removed_bytes)
     write_section_headers(
         RESULT,
         data,
