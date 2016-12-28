@@ -89,7 +89,7 @@ class FileHeader(object):
         # /GL compilation is not supported
         assert self.size_of_optional_header == 0
 
-    def write(self, output, removed_bytes):
+    def write(self, output):
         output.fromstring(
             struct.pack(MACHINE_FORMAT, self.machine))
         output.fromstring(
@@ -97,7 +97,7 @@ class FileHeader(object):
         output.fromstring(
             struct.pack(TIME_DATE_STAMP_FORMAT, self.time_date_stamp)) # SIC
         output.fromstring(
-            struct.pack(POINTER_TO_SYMBOL_TABLE_FORMAT, self.pointer_to_symbol_table - removed_bytes))
+            struct.pack(POINTER_TO_SYMBOL_TABLE_FORMAT, self.pointer_to_symbol_table))
         output.fromstring(
             struct.pack(NUMBER_OF_SYMBOLS_FORMAT, self.number_of_symbols))
         output.fromstring(
@@ -236,16 +236,15 @@ def strip(input_file, out_file):
     header = FileHeader(data)
     # sorted_by_second = sorted(data, key=lambda tup: tup[1])
 
-    # section mapping - old -> new (zero based)
+    old_pointer_to_symbol_table = header.pointer_to_symbol_table
     sections_to_strip = find_sections_to_strip(data, header.number_of_sections)
     sections, removed_pieces, removed_bytes = process(data, header.number_of_sections, sections_to_strip)
 
     header.time_date_stamp = 0
-    #header.pointer_to_symbol_table = header.pointer_to_symbol_table - removed_bytes
+    header.pointer_to_symbol_table = header.pointer_to_symbol_table - removed_bytes
 
     header.write(
-        RESULT,
-        removed_bytes)
+        RESULT)
     write_section_headers(
         RESULT,
         data,
@@ -256,17 +255,17 @@ def strip(input_file, out_file):
         data,
         removed_pieces,
         SECTION_HEADERS_START + header.number_of_sections*SECTION_HEADER_SIZE,
-        header.pointer_to_symbol_table)
+        old_pointer_to_symbol_table)
     write_symbol_table(
         RESULT,
         data,
-        header.pointer_to_symbol_table,
+        old_pointer_to_symbol_table,
         header.number_of_symbols,
         sections_to_strip)
 
     # copying string section of symbol table
     RESULT.fromstring(
-        data[header.pointer_to_symbol_table + SYMBOL_SIZE * header.number_of_symbols:]
+        data[old_pointer_to_symbol_table + SYMBOL_SIZE * header.number_of_symbols:]
     )
 
     with open(out_file, 'wb') as ofile:
