@@ -1,12 +1,20 @@
-# http://www.microsoft.com/whdc/system/platform/firmware/PECOFF.mspx
-# https://github.com/trailofbits/mcsema/tree/master/llvm-3.5/test/tools
 import struct
 import array
 
-# https://github.com/anlongfei/llvm/blob/bd978bf7d464ca151bc7bc7d589ed3eccf7b8d5f/include/llvm/MC/MCSectionCOFF.h
+# 3.3. COFF File Header (Object and Image)
+NUMBER_OF_SECTIONS_OFFSET = 2
+NUMBER_OF_SECTIONS_FORMAT = '<h'
+POINTER_TO_SYMBOL_TABLE_OFFSET = 8
+POINTER_TO_SYMBOL_TABLE_FORMAT = '<I'
+NUMBER_OF_SYMBOLS_OFFSET = 12
+NUMBER_OF_SYMBOLS_FORMAT = '<I'
+SIZE_OF_OPTIONAL_HEADER_OFFSET = 16
+SIZE_OF_OPTIONAL_HEADER_FORMAT = '<h'
 
 # COFF File Header
+COFF_FILE_HEADER_SIZE = 20
 SECTION_HEADERS_START = 20
+
 # 4. Section Table (Section Headers)
 SECTION_HEADER_SIZE = 40
 # 5.2. COFF Relocations (Object Only)
@@ -18,9 +26,13 @@ IMAGE_SCN_LNK_COMDAT = 0x00001000
 
 SYMBOL_SIZE = 18
 
-REMOVE_RELOCATIONS = False
 
 def strip(input_file, out_file):
+    """
+    Strips a COFF file produced by a MSVC compiler, removing non-deterministic information.
+
+    """
+    # http://www.microsoft.com/whdc/system/platform/firmware/PECOFF.mspx
 
     ifile = open(input_file, 'rb')
     bytes = ifile.read()
