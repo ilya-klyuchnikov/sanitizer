@@ -35,20 +35,17 @@ def should_strip_section(sec_characteristics):
     return (sec_characteristics & IMAGE_SCN_MEM_DISCARDABLE != 0) and (sec_characteristics & IMAGE_SCN_LNK_COMDAT == 0)
 
 
-def remap_sections(bytes, number_of_sections):
-    mapping = {}
-    removed_sections = 0
+def find_sections_to_strip(bytes, number_of_sections):
+    sections = []
     for section_i in range(0, number_of_sections):
-        this_start = SECTION_HEADERS_START + section_i * SECTION_HEADER_SIZE
         sec_characteristics, = struct.unpack_from(
             SECTION_HEADER_CHARACTERISTICS_FORMAT,
             bytes,
-            this_start + SECTION_HEADER_CHARACTERISTICS_OFFSET
+            SECTION_HEADERS_START + (section_i * SECTION_HEADER_SIZE) + SECTION_HEADER_CHARACTERISTICS_OFFSET
         )
-
-        if not should_strip_section(sec_characteristics):
-            mapping[section_i] = section_i - removed_sections
-    return mapping
+        if should_strip_section(sec_characteristics):
+            sections.append(section_i)
+    return set(sections)
 
 
 def strip(input_file, out_file):
@@ -83,7 +80,8 @@ def strip(input_file, out_file):
     size_of_optional_header, = struct.unpack_from(
         SIZE_OF_OPTIONAL_HEADER_FORMAT,
         bytes,
-        SIZE_OF_OPTIONAL_HEADER_OFFSET)
+        SIZE_OF_OPTIONAL_HEADER_OFFSET
+    )
 
     # /GL compilation is not supported
     assert size_of_optional_header == 0
@@ -98,7 +96,7 @@ def strip(input_file, out_file):
     max_removed = 0
 
     # section mapping - old -> new (zero based)
-    mapping = remap_sections(bytes, number_of_sections)
+    sections_to_strip = find_sections_to_strip(bytes, number_of_sections)
 
     for section_i in range(0, number_of_sections):
         this_start = SECTION_HEADERS_START + section_i * SECTION_HEADER_SIZE
@@ -112,23 +110,20 @@ def strip(input_file, out_file):
 
         number_of_relocations, = struct.unpack_from('<h', bytes, this_start + 32)
         # we assert no line number for now!
+        # TODO - check that this is 0
         number_of_line_numbers, = struct.unpack_from('<h', bytes, this_start + 34)
-        sec_characteristics, = struct.unpack_from('<I', bytes, this_start + 36)
-
-        # is this enough?
-        to_strip = should_strip_section(sec_characteristics)
 
         if ptr_to_relocations > 0:
             assert ptr_to_relocations >= max_removed
 
-        if to_strip:
+        if section_i in sections_to_strip:
             if size_of_raw_data > 0:
                 removed_pieces.append((ptr_to_raw_data, size_of_raw_data))
                 max_removed = max(max_removed, ptr_to_raw_data + size_of_raw_data)
             if number_of_relocations > 0:
                 removed_pieces.append((ptr_to_relocations, number_of_relocations * RELOCATION_SIZE))
 
-        if to_strip:
+        if section_i in sections_to_strip:
             removed_bytes = removed_bytes + size_of_raw_data + (number_of_relocations * RELOCATION_SIZE)
             sections.append((0, max(ptr_to_relocations - removed_bytes, 0)))
         else:
@@ -143,7 +138,7 @@ def strip(input_file, out_file):
             aux_symbols, = struct.unpack_from('<B', bytes, start + 17)
             section, = struct.unpack_from('<h', bytes, start + 12)
             if section > 0:
-                removing_symbol = (section - 1) not in mapping
+                removing_symbol = (section - 1) in sections_to_strip
                 if removing_symbol:
                     removed_symbols += 1
         else:
@@ -202,13 +197,11 @@ def strip(input_file, out_file):
             aux_symbols, = struct.unpack_from('<B', bytes, start + 17)
             section, = struct.unpack_from('<h', bytes, start + 12)
             if section > 0:
-                removing_symbol = (section - 1) not in mapping
+                removing_symbol = (section - 1) in sections_to_strip
                 if removing_symbol:
                     new_section = 0
                 else:
-                    # coping with mapping
-                    new_section = mapping[section - 1] + 1
-                    # everything up to section
+                    new_section = section
                 new_section = section
                 RESULT.fromstring(bytes[start : start + 12])
                 RESULT.fromstring(struct.pack('<h', new_section))
