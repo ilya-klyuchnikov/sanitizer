@@ -48,6 +48,43 @@ def find_sections_to_strip(bytes, number_of_sections):
     return set(sections)
 
 
+def process(bytes, number_of_sections, sections_to_strip):
+    sections = []
+    removed_pieces = []
+    removed_bytes = 0
+    for section_i in range(0, number_of_sections):
+        this_start = SECTION_HEADERS_START + section_i * SECTION_HEADER_SIZE
+        size_of_raw_data, = struct.unpack_from('<I', bytes, this_start + 16)
+        ptr_to_raw_data, = struct.unpack_from('<I', bytes, this_start + 20)
+        ptr_to_relocations, = struct.unpack_from('<I', bytes, this_start + 24)
+        # 5.3. COFF Line Numbers (Deprecated)
+        # COFF line numbers are no longer produced and, in the future, will not be consumed.
+
+        ptr_to_line_numbers, = struct.unpack_from('<I', bytes, this_start + 28)
+        assert ptr_to_line_numbers == 0
+
+        number_of_relocations, = struct.unpack_from('<h', bytes, this_start + 32)
+        # we assert no line number for now!
+        # TODO - check that this is 0
+        number_of_line_numbers, = struct.unpack_from('<h', bytes, this_start + 34)
+        assert number_of_line_numbers == 0
+
+        if section_i in sections_to_strip:
+            if size_of_raw_data > 0:
+                removed_pieces.append((ptr_to_raw_data, size_of_raw_data))
+            if number_of_relocations > 0:
+                removed_pieces.append((ptr_to_relocations, number_of_relocations * RELOCATION_SIZE))
+
+        if section_i in sections_to_strip:
+            removed_bytes = removed_bytes + size_of_raw_data + (number_of_relocations * RELOCATION_SIZE)
+            sections.append((0, max(ptr_to_relocations - removed_bytes, 0)))
+        else:
+            sections.append((max(ptr_to_raw_data - removed_bytes, 0), max(ptr_to_relocations - removed_bytes, 0)))
+
+    return sections, removed_pieces, removed_bytes
+
+
+
 def strip(input_file, out_file):
     """
     Strips a COFF file produced by a MSVC compiler, removing non-deterministic information.
@@ -86,48 +123,12 @@ def strip(input_file, out_file):
     # /GL compilation is not supported
     assert size_of_optional_header == 0
 
-    # an array of tuples - (start, size)
-    removed_pieces = []
-
     # sorted_by_second = sorted(data, key=lambda tup: tup[1])
-
-    removed_bytes = 0
-    sections = []
-    max_removed = 0
 
     # section mapping - old -> new (zero based)
     sections_to_strip = find_sections_to_strip(bytes, number_of_sections)
 
-    for section_i in range(0, number_of_sections):
-        this_start = SECTION_HEADERS_START + section_i * SECTION_HEADER_SIZE
-        size_of_raw_data, = struct.unpack_from('<I', bytes, this_start + 16)
-        ptr_to_raw_data, = struct.unpack_from('<I', bytes, this_start + 20)
-        ptr_to_relocations, = struct.unpack_from('<I', bytes, this_start + 24)
-        # 5.3. COFF Line Numbers (Deprecated)
-        # COFF line numbers are no longer produced and, in the future, will not be consumed.
-        # TODO - check that this is 0
-        ptr_to_line_numbers, = struct.unpack_from('<I', bytes, this_start + 28)
-
-        number_of_relocations, = struct.unpack_from('<h', bytes, this_start + 32)
-        # we assert no line number for now!
-        # TODO - check that this is 0
-        number_of_line_numbers, = struct.unpack_from('<h', bytes, this_start + 34)
-
-        if ptr_to_relocations > 0:
-            assert ptr_to_relocations >= max_removed
-
-        if section_i in sections_to_strip:
-            if size_of_raw_data > 0:
-                removed_pieces.append((ptr_to_raw_data, size_of_raw_data))
-                max_removed = max(max_removed, ptr_to_raw_data + size_of_raw_data)
-            if number_of_relocations > 0:
-                removed_pieces.append((ptr_to_relocations, number_of_relocations * RELOCATION_SIZE))
-
-        if section_i in sections_to_strip:
-            removed_bytes = removed_bytes + size_of_raw_data + (number_of_relocations * RELOCATION_SIZE)
-            sections.append((0, max(ptr_to_relocations - removed_bytes, 0)))
-        else:
-            sections.append((max(ptr_to_raw_data - removed_bytes, 0), max(ptr_to_relocations - removed_bytes, 0)))
+    sections, removed_pieces, removed_bytes = process(bytes, number_of_sections, sections_to_strip)
 
     removed_symbols = 0
     aux_symbols = 0
