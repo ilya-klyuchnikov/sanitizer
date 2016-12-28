@@ -84,6 +84,25 @@ def process(bytes, number_of_sections, sections_to_strip):
     return sections, removed_pieces, removed_bytes
 
 
+def calculate_removed_symbols(bytes, number_of_symbols, pointer_to_symbol_table, sections_to_strip):
+    removed_symbols = 0
+    removing_symbol = False
+    aux_symbols = 0
+    for i in range(0, number_of_symbols):
+        start = pointer_to_symbol_table + SYMBOL_SIZE * i
+        if aux_symbols == 0:
+            aux_symbols, = struct.unpack_from('<B', bytes, start + 17)
+            section, = struct.unpack_from('<h', bytes, start + 12)
+            if section > 0:
+                removing_symbol = (section - 1) in sections_to_strip
+                if removing_symbol:
+                    removed_symbols += 1
+        else:
+            aux_symbols -= 1
+            if removing_symbol:
+                removed_symbols += 1
+    return removed_symbols
+
 
 def strip(input_file, out_file):
     """
@@ -127,27 +146,10 @@ def strip(input_file, out_file):
 
     # section mapping - old -> new (zero based)
     sections_to_strip = find_sections_to_strip(bytes, number_of_sections)
-
     sections, removed_pieces, removed_bytes = process(bytes, number_of_sections, sections_to_strip)
 
-    removed_symbols = 0
-    aux_symbols = 0
-    removing_symbol = False
-    for i in range(0, number_of_symbols):
-        start = pointer_to_symbol_table + SYMBOL_SIZE * i
-        if aux_symbols == 0:
-            aux_symbols, = struct.unpack_from('<B', bytes, start + 17)
-            section, = struct.unpack_from('<h', bytes, start + 12)
-            if section > 0:
-                removing_symbol = (section - 1) in sections_to_strip
-                if removing_symbol:
-                    removed_symbols += 1
-        else:
-            aux_symbols -= 1
-            if removing_symbol:
-                removed_symbols += 1
-
     RESULT = array.array('b')
+
     RESULT.fromstring(bytes[0:2])
     RESULT.fromstring(struct.pack('<h', number_of_sections))
     RESULT.fromstring(struct.pack('<I', 0))
@@ -183,6 +185,7 @@ def strip(input_file, out_file):
                 return True
         return False
 
+    # copying everything up to the symbol table symbol
     for i in range(SECTION_HEADERS_START + number_of_sections*SECTION_HEADER_SIZE, pointer_to_symbol_table):
         if stripped(i):
             pass
@@ -191,7 +194,7 @@ def strip(input_file, out_file):
 
     aux_symbols = 0
     removing_symbol = False
-    # repacking symbol table now
+    # copying symbol table
     for i in range(0, number_of_symbols):
         start = pointer_to_symbol_table + SYMBOL_SIZE * i
         if aux_symbols == 0:
@@ -199,13 +202,8 @@ def strip(input_file, out_file):
             section, = struct.unpack_from('<h', bytes, start + 12)
             if section > 0:
                 removing_symbol = (section - 1) in sections_to_strip
-                if removing_symbol:
-                    new_section = 0
-                else:
-                    new_section = section
-                new_section = section
                 RESULT.fromstring(bytes[start : start + 12])
-                RESULT.fromstring(struct.pack('<h', new_section))
+                RESULT.fromstring(struct.pack('<h', section))
                 # everything after section
                 RESULT.fromstring(bytes[start + 14 : start + SYMBOL_SIZE])
             else:
@@ -219,8 +217,7 @@ def strip(input_file, out_file):
             else:
                 RESULT.fromstring(bytes[start : start + SYMBOL_SIZE])
 
-
-    # string section
+    # copying string section of symbol table
     RESULT.fromstring(bytes[pointer_to_symbol_table + SYMBOL_SIZE * number_of_symbols:])
 
     ofile = open(out_file, 'wb')
