@@ -140,8 +140,6 @@ def process(data, number_of_sections, sections_to_strip):
         assert ptr_to_line_numbers == 0
 
         number_of_relocations, = struct.unpack_from('<h', data, this_start + 32)
-        # we assert no line number for now!
-        # TODO - check that this is 0
         number_of_line_numbers, = struct.unpack_from('<h', data, this_start + 34)
         assert number_of_line_numbers == 0
 
@@ -206,16 +204,12 @@ def write_symbol_table(RESULT, data, pointer_to_symbol_table, number_of_symbols,
             section, = struct.unpack_from('<h', data, start + 12)
             if section > 0:
                 removing_symbol = (section - 1) in sections_to_strip
-                RESULT.fromstring(data[start : start + 12])
-                RESULT.fromstring(struct.pack('<h', section))
-                RESULT.fromstring(data[start + 14 : start + SYMBOL_SIZE])
             else:
                 removing_symbol = False
-                RESULT.fromstring(data[start : start + SYMBOL_SIZE])
+            RESULT.fromstring(data[start : start + SYMBOL_SIZE])
         else:
             aux_symbols -= 1
             if removing_symbol:
-                print 'PROCESSING AUX SYMBOL' # making it 00000
                 RESULT.fromstring(str(bytearray(18)))
             else:
                 RESULT.fromstring(data[start : start + SYMBOL_SIZE])
@@ -241,7 +235,7 @@ def strip(input_file, out_file):
     sections, removed_pieces, removed_bytes = process(data, header.number_of_sections, sections_to_strip)
 
     header.time_date_stamp = 0
-    header.pointer_to_symbol_table = header.pointer_to_symbol_table - removed_bytes
+    header.pointer_to_symbol_table -= removed_bytes
 
     header.write(
         RESULT)
