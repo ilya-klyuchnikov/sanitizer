@@ -1,3 +1,6 @@
+# https://msdn.microsoft.com/en-us/library/ba1z7822.aspx#Example
+# https://msdn.microsoft.com/en-us/library/2kzt1wy3(v=vs.80).aspx - very interesting
+
 import coff
 import subprocess
 import shutil
@@ -19,6 +22,7 @@ INCLUDE_FLAGS = [
   '/IC:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.10586.0\\ucrt',
   '/IC:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.10586.0\\um',
   '/IC:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.10586.0\\shared',
+  '/D_USRDLL', '/D_WINDLL',
 ]
 
 CL_EXE = "C:\\Program Files (x86)\\Microsoft Visual Studio 14.0\\VC\\bin\\amd64\\cl.exe"
@@ -68,6 +72,25 @@ def strip(projects, name):
     for project in projects:
         coff.strip('{0}/{1}.obj'.format(project, name), '{0}/{1}-stripped.obj'.format(project, name))
 
+
+def link_dll(projects, name):
+    """builds 2 dll files"""
+    for project in projects:
+        flags = [
+            '/nologo',
+            '{0}/{1}.lib'.format(project, name),
+            '/DLL',
+            '/OUT:{0}/{1}.dll'.format(project, name),
+            '/MACHINE:X64',
+            'msvcrt.lib',
+        ]
+        command = [LINK_EXE] + LIBPATH_FLAGS + flags
+        print command
+        verbose(command)
+        result = subprocess.call(command)
+        assert result == 0
+
+
 def build():
     FLAGS = [
         [],
@@ -94,6 +117,7 @@ def build():
         ('util1', 'c'),
         ('util2', 'cpp'),
         ('util3', 'cpp'),
+        ('EmptyDllMain', 'cpp'),
     ]
 
     shutil.rmtree('tmp_lib', ignore_errors=True)
@@ -123,6 +147,11 @@ def build():
 
         make_lib(projects, obj_files, 'lib.lib')
         make_lib(projects, obj_files_stripped, 'lib-stripped.lib')
+
+        link_dll(projects, 'lib')
+        import time
+        time.sleep(5)
+        link_dll(projects, 'lib-stripped')
 
 
 # the main stuff

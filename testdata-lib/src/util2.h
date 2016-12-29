@@ -1,1 +1,1 @@
-int util2();
+__declspec(dllexport) int util2();
