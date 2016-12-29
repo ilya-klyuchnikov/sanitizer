@@ -10,8 +10,13 @@ build: off
 
 build_script:
   - "python coff_test.py"
+  - "python lib_test.py"
 
 artifacts:
   - path: tmp
-    name: binaries
+    name: obj
+    type: zipåå
+  - path: tmp-lib
+    name: lib
     type: zip
+
