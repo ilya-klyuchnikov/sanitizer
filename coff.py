@@ -184,12 +184,7 @@ def write_section_headers(output, data, sections, number_of_sections):
             output.fromstring(data[this_start + 34 : this_start + 40])
 
 
-def write_data(output, data, to_copy):
-    for x, y in to_copy:
-        output.fromstring(data[x:y])
-
-
-def write_symbol_table(RESULT, data, pointer_to_symbol_table, number_of_symbols, sections_to_strip):
+def write_symbol_table(output, data, pointer_to_symbol_table, number_of_symbols, sections_to_strip):
     aux_symbols = 0
     removing_symbol = False
     for i in range(0, number_of_symbols):
@@ -201,13 +196,13 @@ def write_symbol_table(RESULT, data, pointer_to_symbol_table, number_of_symbols,
                 removing_symbol = (section - 1) in sections_to_strip
             else:
                 removing_symbol = False
-            RESULT.fromstring(data[start : start + SYMBOL_SIZE])
+            output.fromstring(data[start : start + SYMBOL_SIZE])
         else:
             aux_symbols -= 1
             if removing_symbol:
-                RESULT.fromstring(str(bytearray(18)))
+                output.fromstring(str(bytearray(18)))
             else:
-                RESULT.fromstring(data[start : start + SYMBOL_SIZE])
+                output.fromstring(data[start : start + SYMBOL_SIZE])
 
 
 def strip(input_file, out_file):
@@ -220,7 +215,7 @@ def strip(input_file, out_file):
     with open(input_file, 'rb') as ifile:
         data = ifile.read()
 
-    RESULT = array.array('b')
+    output = array.array('b')
 
     header = FileHeader(data)
     # sorted_by_second = sorted(data, key=lambda tup: tup[1])
@@ -228,32 +223,33 @@ def strip(input_file, out_file):
     old_pointer_to_symbol_table = header.pointer_to_symbol_table
     sections_to_strip = find_sections_to_strip(data, header.number_of_sections)
     sections, removed_bytes, to_copy = process(data, header.number_of_sections, sections_to_strip)
+    to_copy_string_section = [
+        (header.pointer_to_symbol_table + SYMBOL_SIZE * header.number_of_symbols, len(data)),
+    ]
 
     header.time_date_stamp = 0
     header.pointer_to_symbol_table -= removed_bytes
 
     header.write(
-        RESULT)
+        output)
     write_section_headers(
-        RESULT,
+        output,
         data,
         sections,
         header.number_of_sections)
-    write_data(
-        RESULT,
-        data,
-        to_copy)
+
+    for start, end in to_copy:
+        output.fromstring(data[start:end])
+
     write_symbol_table(
-        RESULT,
+        output,
         data,
         old_pointer_to_symbol_table,
         header.number_of_symbols,
         sections_to_strip)
 
-    # copying string section of symbol table
-    RESULT.fromstring(
-        data[old_pointer_to_symbol_table + SYMBOL_SIZE * header.number_of_symbols:]
-    )
+    for start, end in to_copy_string_section:
+        output.fromstring(data[start:end])
 
     with open(out_file, 'wb') as ofile:
-        RESULT.tofile(ofile)
+        output.tofile(ofile)
