@@ -9,7 +9,7 @@ install:
 build: off
 
 build_script:
-  - "python test.py"
+  - "python coff_test.py"
 
 artifacts:
   - path: tmp
