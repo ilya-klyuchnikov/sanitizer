@@ -9,6 +9,8 @@ SIZE_LENGTH = 10
 HEADER_SIZE = 60
 HEADER_START = 8
 
+DEFAULT_DATE = '0           '
+
 
 def fix_timestamp(input_file, output_file):
     with open(input_file, 'rb') as ifile:
@@ -23,20 +25,19 @@ def fix_timestamp(input_file, output_file):
     output.fromstring(signature)
 
     while header_start < len(data):
-        print '============='
-        print 'start: {0} ({1})'.format(header_start, hex(header_start))
 
-        time_date_stamp_str = data[header_start + TIME_DATE_STAMP_OFFSET : header_start + TIME_DATE_STAMP_OFFSET + TIME_DATE_STAMP_LENGTH]
-        time_date_stamp = int(time_date_stamp_str)
-        print 'date: {0} ({1})'.format(time_date_stamp, hex(time_date_stamp))
+        header = data[header_start:header_start + HEADER_SIZE]
 
-        size_str = data[header_start + SIZE_OFFSET : header_start + SIZE_OFFSET + SIZE_LENGTH]
+        size_str = header[SIZE_OFFSET:SIZE_OFFSET + SIZE_LENGTH]
         size = int(size_str)
-        print 'size: {0}, ({1})'.format(size, hex(size))
-
         real_size = size + (size % 2)
+
+        stripped_header = header[:TIME_DATE_STAMP_OFFSET] + DEFAULT_DATE + header[TIME_DATE_STAMP_OFFSET + TIME_DATE_STAMP_LENGTH:]
+        piece = data[header_start + HEADER_SIZE:header_start + HEADER_SIZE + real_size]
+        output.fromstring(stripped_header)
+        output.fromstring(piece)
 
         header_start = header_start + HEADER_SIZE + real_size
 
-
-fix_timestamp('/Volumes/C/sanitizer110/tmp-lib/0/1/lib.lib', 'stripped.lib')
+    with open(output_file, 'wb') as ofile:
+        output.tofile(ofile)
