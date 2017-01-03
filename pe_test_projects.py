@@ -1,5 +1,6 @@
 import subprocess
 import shutil
+import pe
 
 # currently I assume SDK 10.0.10586.0
 # TODO - generalize to test with different versions
@@ -39,6 +40,11 @@ def make_project(files, output_file):
     assert result == 0
 
 
+def compare_files(f1, f2):
+    with open(f1, 'rb') as file1, open(f2, 'rb') as file2:
+        return file1.read() == file2.read()
+
+
 def test():
     shutil.rmtree('tmp_projects', ignore_errors=True)
     import os
@@ -50,7 +56,8 @@ def test():
     ]
 
     make_project(files, 'tmp_projects/01-main.exe')
-
+    pe.fix_dll_timestamp('tmp_projects/01-main.exe', 'tmp_projects/01-main-fixed.exe')
+    assert compare_files('testdata-projects/01-main/01-main-fixed.exe', 'tmp_projects/01-main-fixed.exe')
 
 # the main stuff
 test()
