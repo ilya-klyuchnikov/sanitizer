@@ -119,7 +119,7 @@ def check_the_same(projects, name):
 
 def check_expected(i, projects, name):
     n1 = '{0}/{1}-stripped.obj'.format(projects[0], name)
-    n2 = 'testdata/expected/{0}_{1}-stripped.obj'.format(i, name)
+    n2 = 'testdata-obj/expected/{0}_{1}-stripped.obj'.format(i, name)
     the_same = compare_files(n1, n2)
     if TEST:
         assert the_same, name
@@ -129,7 +129,7 @@ def check_expected(i, projects, name):
 
 def copy_expected(i, projects, name):
     n1 = '{0}/{1}-stripped.obj'.format(projects[0], name)
-    n2 = 'testdata/expected/{0}_{1}-stripped.obj'.format(i, name)
+    n2 = 'testdata-obj/expected/{0}_{1}-stripped.obj'.format(i, name)
     shutil.copyfile(n1, n2)
 
 
@@ -165,7 +165,7 @@ def build():
 
     shutil.rmtree('tmp', ignore_errors=True)
     # import os
-    #os.makedirs('testdata/expected')
+    #os.makedirs('testdata-obj/expected')
 
     for i in range(0, len(FLAGS)):
         flags = FLAGS[i]
