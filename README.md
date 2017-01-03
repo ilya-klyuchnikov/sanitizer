@@ -1,17 +1,11 @@
-# Utilities to make cxx compilation with MSVS compilers more deterministic
+# Experimental utilities to make cxx compilation with MSVS compilers deterministic
 
-## coff.py
+* `coff.strip(input_file, out_file)` - strips an `obj` file produced by a MSVC compiler removing/modifying following information:
+  * removes `IMAGE_SCN_MEM_DISCARDABLE` sections which do not have `IMAGE_SCN_LNK_COMDAT` attribute
+    (usually, they are `debug$s` and `debug$t` sections).
+  * sets timestamps to `0`
+* `pe.fix_lib_timestamps(input_file, out_file)` - sets all timestamps of a `lib` file (produced by `lib.exe`) to `0`.
+* `pe.fix_dll_timestamp(input_file, out_file)` - sets a timestamp of a `dll` file (produced by link.exe) to `0`
 
-Description: removes information with absolute paths from object files (in COFF format).
+See `coff_test.py` and `pe_test.py` for examples.
 
-Usage: `python coff.py input.obj output.obj`.
-
-## Subtleties
-
-Some details may depend not only on a name of a dir of a project in filesystem, but also on a length of a path.
-
-## TODO
-
-- more tests for different directories (long/short paths) and different options
-- describe assertions
-- store exceptions
