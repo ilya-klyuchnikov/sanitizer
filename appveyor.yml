@@ -9,7 +9,7 @@ install:
 build: off
 
 build_script:
-  - "python coff_test.py"
+  - "python obj_test.py"
   - "python pe_test.py"
 
 artifacts:
