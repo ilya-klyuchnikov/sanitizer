@@ -23,13 +23,6 @@ distribution archive.
 
 from __future__ import division
 from __future__ import print_function
-from past.builtins import cmp, long
-from builtins import bytes
-from builtins import chr
-from builtins import object
-from builtins import range
-from builtins import str
-from builtins import zip
 
 __author__ = 'Ero Carrera'
 __version__ = '2016.3.28'
@@ -945,6 +938,17 @@ class Structure(object):
                     self.__field_offsets__[key], key+':', val_str))
 
         return dump
+
+
+    def default_timestamp(self):
+        for keys in self.__keys__:
+            for key in keys:
+
+                val = getattr(self, key)
+                if isinstance(val, (int, long)):
+                    if key == 'TimeDateStamp' or key == 'dwTimeStamp':
+                        setattr(self, key, 0)
+
 
     def dump_dict(self):
         """Returns a dictionary representation of the structure."""
@@ -2205,6 +2209,9 @@ class PE(object):
 
         self.parse_data_directories()
 
+    def default_timestamp(self):
+        for structure in self.__structures__:
+            structure.default_timestamp()
 
     def write(self, filename=None):
         """Write the PE file.
