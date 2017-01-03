@@ -1,7 +1,7 @@
 # https://msdn.microsoft.com/en-us/library/ba1z7822.aspx#Example
 # https://msdn.microsoft.com/en-us/library/2kzt1wy3(v=vs.80).aspx - very interesting
 
-import coff
+import obj
 import subprocess
 import shutil
 import sys
@@ -70,7 +70,7 @@ def make_lib(projects, files, output):
 def strip(projects, name):
     """builds 2 lib files"""
     for project in projects:
-        coff.strip('{0}/{1}.obj'.format(project, name), '{0}/{1}-stripped.obj'.format(project, name))
+        obj.strip('{0}/{1}.obj'.format(project, name), '{0}/{1}-stripped.obj'.format(project, name))
 
 
 def link_dll(projects, name):

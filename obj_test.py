@@ -1,4 +1,4 @@
-import coff
+import obj
 import subprocess
 import shutil
 import sys
@@ -97,7 +97,7 @@ def make_lib(projects, name):
 def strip(projects, name):
     """builds 2 lib files"""
     for project in projects:
-        coff.strip('{0}/{1}.obj'.format(project, name), '{0}/{1}-stripped.obj'.format(project, name))
+        obj.strip('{0}/{1}.obj'.format(project, name), '{0}/{1}-stripped.obj'.format(project, name))
 
 
 def compare_files(f1, f2):
