@@ -176,8 +176,8 @@ def build():
             'tmp/{0}/long_dir/long_dir/long_dir/long_dir/long_dir/long_dir/long_dir/long_dir/long_dir'.format(i),
         ]
 
-        shutil.copytree('testdata/src', projects[0])
-        shutil.copytree('testdata/src', projects[1])
+        shutil.copytree('testdata-obj/src', projects[0])
+        shutil.copytree('testdata-obj/src', projects[1])
 
         for f, ext in files:
             print 'FILE: {0}.{1}, OPTIONS: {2}'.format(f, ext, flags)
