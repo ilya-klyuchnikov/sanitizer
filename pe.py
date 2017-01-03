@@ -45,19 +45,37 @@ def fix_lib_timestamps(input_file, output_file):
 
 
 FORMAT = '<I'
-OFFSET0 = 60
-OFFSET1 = 8
+OFFSET_TO_NEW_HEADER = 60
+SIGNATURE_SIZE = 4
+IMAGE_NT_NUMBER_OF_SECTIONS_OFFSET = 2
+IMAGE_NT_HEADERS_DATE_OFFSET = 4
 SIZE = 4
 DEFAULT_DATE_DLL = bytearray(4)
+
+SIZE_OF_OPTIONAL_HEADER_OFFSET = 16
+SIZE_OF_OPTIONAL_HEADER_FORMAT = '<h'
+
 
 
 def fix_dll_timestamp(input_file, output_file):
     with open(input_file, 'rb') as ifile:
         data = ifile.read()
 
-    nexxxt, = struct.unpack_from(FORMAT, data, OFFSET0)
-    print nexxxt
-    tmp_start = nexxxt + OFFSET1
+    nt_header_start, = struct.unpack_from(FORMAT, data, OFFSET_TO_NEW_HEADER)
+    print nt_header_start
+    tmp_start = nt_header_start + SIGNATURE_SIZE + IMAGE_NT_HEADERS_DATE_OFFSET
+    number_of_sections = struct.unpack_from(
+        '<h',
+        data,
+        nt_header_start + SIGNATURE_SIZE + IMAGE_NT_NUMBER_OF_SECTIONS_OFFSET
+    )
+
+    size_of_optional_header = struct.unpack_from(
+        SIZE_OF_OPTIONAL_HEADER_FORMAT,
+        data,
+        nt_header_start + SIGNATURE_SIZE + SIZE_OF_OPTIONAL_HEADER_OFFSET
+    )
+
 
     output = data[:tmp_start] + DEFAULT_DATE_DLL + data[tmp_start + SIZE:]
 

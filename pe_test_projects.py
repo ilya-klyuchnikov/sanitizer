@@ -1,6 +1,11 @@
+# https://msdn.microsoft.com/en-us/library/ba1z7822.aspx#Example
+# https://msdn.microsoft.com/en-us/library/2kzt1wy3(v=vs.80).aspx - very interesting
+
+import obj
+import pefile
 import subprocess
 import shutil
-import pe
+import os
 
 # currently I assume SDK 10.0.10586.0
 # TODO - generalize to test with different versions
@@ -21,6 +26,7 @@ INCLUDE_FLAGS = [
 ]
 
 CL_EXE = "C:\\Program Files (x86)\\Microsoft Visual Studio 14.0\\VC\\bin\\amd64\\cl.exe"
+LIB_EXE = "C:\\Program Files (x86)\\Microsoft Visual Studio 14.0\\VC\\bin\\amd64\\lib.exe"
 LINK_EXE = "C:\\Program Files (x86)\\Microsoft Visual Studio 14.0\\VC\\bin\\amd64\\link.exe"
 
 VERBOSE = False
@@ -32,10 +38,29 @@ def verbose(msg):
         print msg
 
 
-def make_project(files, output_file):
-    command = [CL_EXE] + files + INCLUDE_FLAGS + ['/Fe:{0}'.format(output_file), '/link'] + LIBPATH_FLAGS
+def build_obj(input_file, output_file, extra_flags=[]):
+    flags = [
+        '/nologo',
+        '/c',
+        '/Fo:{0}'.format(output_file),
+        input_file,
+    ]
+    command = [CL_EXE] + INCLUDE_FLAGS + flags + extra_flags
+    verbose(command)
+    result = subprocess.call(command)
+    assert result == 0
 
-    print command
+
+def link_exe(obj_files, output_file):
+    command = [LINK_EXE] + LIBPATH_FLAGS + obj_files + ['/out:{0}'.format(output_file)]
+    verbose(command)
+    result = subprocess.call(command)
+    assert result == 0
+
+
+def link_dll(obj_files, output_file):
+    command = [LINK_EXE, '/dll'] + LIBPATH_FLAGS + obj_files + ['/out:{0}'.format(output_file)]
+    verbose(command)
     result = subprocess.call(command)
     assert result == 0
 
@@ -45,19 +70,65 @@ def compare_files(f1, f2):
         return file1.read() == file2.read()
 
 
-def test():
-    shutil.rmtree('tmp_projects', ignore_errors=True)
-    import os
-    os.makedirs('tmp_projects')
+def build():
+    FLAGS = [
+        [],
+        # ['/Zi'],
+        # ['/ZI'],
+        # ['/Z7'],
+        # ['/Gm', '/Zi'],
+        # ['/Gm', '/ZI'],
+        # # wrong assumption about headers
+        # # ['/GL'],
+        # ['/GR'],
+        # ['/Gw'],
+        # ['/Gy'],
+        # ['/X'],
+        # ['/O1'],
+        # ['/O2'],
+        # ['/Od'],
+        # ['/Oi'],
+        # ['/Os'],
+        # ['/Ot'],
+    ]
 
     files = [
         'testdata-projects/01-main/lib.c',
         'testdata-projects/01-main/main.c',
     ]
 
-    make_project(files, 'tmp_projects/01-main.exe')
-    pe.fix_dll_timestamp('tmp_projects/01-main.exe', 'tmp_projects/01-main-fixed.exe')
-    assert compare_files('testdata-projects/01-main/01-main-fixed.exe', 'tmp_projects/01-main-fixed.exe')
+    shutil.rmtree('tmp_projects', ignore_errors=True)
+    os.makedirs('tmp_projects')
 
-# the main stuff
-test()
+    build_obj(
+        'testdata-projects/01-main/lib.c', 'tmp_projects/lib.obj'
+    )
+
+    build_obj(
+        'testdata-projects/01-main/main.c', 'tmp_projects/main.obj'
+    )
+
+    obj.strip('tmp_projects/lib.obj', 'tmp_projects/lib-stripped.obj')
+    obj.strip('tmp_projects/main.obj', 'tmp_projects/main-stripped.obj')
+
+    link_exe(['tmp_projects/lib-stripped.obj', 'tmp_projects/main-stripped.obj'], 'tmp_projects/main-stripped.exe')
+    import time
+    time.sleep(5)
+    link_exe(['tmp_projects/lib.obj', 'tmp_projects/main.obj'], 'tmp_projects/main.exe')
+
+    #pe.fix_dll_timestamp('tmp_projects/main.exe', 'tmp_projects/main-fixed.exe')
+    #pe.fix_dll_timestamp('tmp_projects/main-stripped.exe', 'tmp_projects/main-stripped-fixed.exe')
+
+    pe = pefile.PE('tmp_projects/main.exe')
+    pe.default_timestamp()
+    pe.write('tmp_projects/main-fixed.exe')
+
+    pe = pefile.PE('tmp_projects/main-stripped.exe')
+    pe.default_timestamp()
+    pe.write('tmp_projects/main-stripped-fixed.exe')
+
+    assert compare_files('tmp_projects/main-fixed.exe', 'tmp_projects/main-stripped-fixed.exe')
+    assert compare_files('testdata-projects/01-main/main-fixed.exe', 'tmp_projects/main-fixed.exe')
+
+build()
+
