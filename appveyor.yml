@@ -10,7 +10,6 @@ build: off
 
 build_script:
   - "python obj_test.py"
-  - "python pe_test.py"
   - "python pe_test_projects.py"
 
 artifacts:
