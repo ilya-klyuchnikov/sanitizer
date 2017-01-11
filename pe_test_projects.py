@@ -6,6 +6,7 @@ import pefile
 import subprocess
 import shutil
 import os
+import time
 
 # currently I assume SDK 10.0.10586.0
 # TODO - generalize to test with different versions
@@ -70,32 +71,7 @@ def compare_files(f1, f2):
         return file1.read() == file2.read()
 
 
-def build():
-    FLAGS = [
-        [],
-        # ['/Zi'],
-        # ['/ZI'],
-        # ['/Z7'],
-        # ['/Gm', '/Zi'],
-        # ['/Gm', '/ZI'],
-        # # wrong assumption about headers
-        # # ['/GL'],
-        # ['/GR'],
-        # ['/Gw'],
-        # ['/Gy'],
-        # ['/X'],
-        # ['/O1'],
-        # ['/O2'],
-        # ['/Od'],
-        # ['/Oi'],
-        # ['/Os'],
-        # ['/Ot'],
-    ]
-
-    files = [
-        'testdata-projects/01-main/lib.c',
-        'testdata-projects/01-main/main.c',
-    ]
+def run_tests():
 
     shutil.rmtree('tmp_projects', ignore_errors=True)
     os.makedirs('tmp_projects')
@@ -112,23 +88,33 @@ def build():
     obj.strip('tmp_projects/main.obj', 'tmp_projects/main-stripped.obj')
 
     link_exe(['tmp_projects/lib-stripped.obj', 'tmp_projects/main-stripped.obj'], 'tmp_projects/main-stripped.exe')
-    import time
+    link_dll(['tmp_projects/lib-stripped.obj', 'tmp_projects/main-stripped.obj'], 'tmp_projects/main-stripped.dll')
     time.sleep(5)
     link_exe(['tmp_projects/lib.obj', 'tmp_projects/main.obj'], 'tmp_projects/main.exe')
-
-    #pe.fix_dll_timestamp('tmp_projects/main.exe', 'tmp_projects/main-fixed.exe')
-    #pe.fix_dll_timestamp('tmp_projects/main-stripped.exe', 'tmp_projects/main-stripped-fixed.exe')
+    link_dll(['tmp_projects/lib.obj', 'tmp_projects/main.obj'], 'tmp_projects/main.dll')
 
     pe = pefile.PE('tmp_projects/main.exe')
     pe.default_timestamp()
     pe.write('tmp_projects/main-fixed.exe')
 
+    pe = pefile.PE('tmp_projects/main.dll')
+    pe.default_timestamp()
+    pe.write('tmp_projects/main-fixed.dll')
+
     pe = pefile.PE('tmp_projects/main-stripped.exe')
     pe.default_timestamp()
     pe.write('tmp_projects/main-stripped-fixed.exe')
 
+    pe = pefile.PE('tmp_projects/main-stripped.dll')
+    pe.default_timestamp()
+    pe.write('tmp_projects/main-stripped-fixed.dll')
+
     assert compare_files('tmp_projects/main-fixed.exe', 'tmp_projects/main-stripped-fixed.exe')
     assert compare_files('testdata-projects/01-main/main-fixed.exe', 'tmp_projects/main-fixed.exe')
 
-build()
+    assert compare_files('tmp_projects/main-fixed.dll', 'tmp_projects/main-stripped-fixed.dll')
+    assert compare_files('testdata-projects/01-main/main-fixed.dll', 'tmp_projects/main-fixed.dll')
+
+
+run_tests()
 

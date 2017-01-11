@@ -133,7 +133,7 @@ def copy_expected(i, projects, name):
     shutil.copyfile(n1, n2)
 
 
-def build():
+def run_tests():
     FLAGS = [
         [],
         ['/Zi'],
@@ -193,4 +193,4 @@ def build():
             #copy_expected(i, projects, f)
 
 # the main stuff
-build()
+run_tests()
