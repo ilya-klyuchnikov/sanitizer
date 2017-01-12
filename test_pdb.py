@@ -3,6 +3,7 @@
 
 import subprocess
 import shutil
+import time
 
 # currently I assume SDK 10.0.10586.0
 # TODO - generalize to test with different versions
@@ -62,20 +63,25 @@ def compare_files(f1, f2):
 
 def run_tests():
 
-    shutil.rmtree('tmp_pdb', ignore_errors=True)
-    shutil.copytree('testdata', 'tmp_pdb')
+    shutil.rmtree('tmp_pdb_0', ignore_errors=True)
+    shutil.copytree('testdata', 'tmp_pdb_0')
 
     build_obj_files(
-        'tmp_pdb',
+        'tmp_pdb_0',
         ['foo.c', 'bar.c'],
         'obj_pdb.pdb'
     )
 
     link_dll(
-        'tmp_pdb',
+        'tmp_pdb_0',
         ['foo.obj', 'bar.obj'],
         'dll.dll',
         'dll_pdb.pdb'
     )
+
+run_tests()
+
+shutil.rmtree('tmp_pdb_1', ignore_errors=True)
+shutil.copytree('tmp_pdb_0', 'tmp_pdb_1')
 
 run_tests()
