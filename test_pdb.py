@@ -4,6 +4,7 @@
 import subprocess
 import shutil
 import time
+import pefile
 
 # currently I assume SDK 10.0.10586.0
 # TODO - generalize to test with different versions
@@ -63,7 +64,7 @@ def compare_files(f1, f2):
 
 def run_tests():
 
-    shutil.rmtree('tmp_pdb_0', ignore_errors=True)
+    shutil.rmtree('tmp_pdb_0')
     shutil.copytree('testdata', 'tmp_pdb_0')
 
     build_obj_files(
@@ -79,9 +80,15 @@ def run_tests():
         'dll_pdb.pdb'
     )
 
+    pe = pefile.PE('tmp_pdb_0/dll.dll')
+    pe.default_timestamp()
+    pe.write('tmp_pdb_0/dll-fixed.dll')
+    pe.close()
+
 run_tests()
 
-shutil.rmtree('tmp_pdb_1', ignore_errors=True)
+time.sleep(5)
+shutil.rmtree('tmp_pdb_1')
 shutil.copytree('tmp_pdb_0', 'tmp_pdb_1')
 
 run_tests()
