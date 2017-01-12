@@ -11,9 +11,9 @@ import pefile
 
 # paths with lib files for linking 64bit apps with VS 2015 and Windows SDK 10.0.10586.0
 LIBPATH_FLAGS = [
-  '/LIBPATH:C:\\Program Files (x86)\\Microsoft Visual Studio 14.0\\VC\\LIB\\amd64',
-  '/LIBPATH:C:\\Program Files (x86)\\Windows Kits\\10\\lib\\10.0.10586.0\\ucrt\\x64',
-  '/LIBPATH:C:\\Program Files (x86)\\Windows Kits\\10\\lib\\10.0.10586.0\\um\\x64',
+  '/LIBPATH:C:\\Program Files (x86)\\Microsoft Visual Studio 14.0\\VC\\LIB',
+  '/LIBPATH:C:\\Program Files (x86)\\Windows Kits\\10\\lib\\10.0.10586.0\\ucrt\\x86',
+  '/LIBPATH:C:\\Program Files (x86)\\Windows Kits\\10\\lib\\10.0.10586.0\\um\\x86',
 ]
 
 # paths with header files for compiling with VS 2015 and Windows SDK 10.0.10586.0
@@ -24,9 +24,9 @@ INCLUDE_FLAGS = [
   '/IC:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.10586.0\\shared',
 ]
 
-CL_EXE = "C:\\Program Files (x86)\\Microsoft Visual Studio 14.0\\VC\\bin\\amd64\\cl.exe"
-LIB_EXE = "C:\\Program Files (x86)\\Microsoft Visual Studio 14.0\\VC\\bin\\amd64\\lib.exe"
-LINK_EXE = "C:\\Program Files (x86)\\Microsoft Visual Studio 14.0\\VC\\bin\\amd64\\link.exe"
+CL_EXE = "C:\\Program Files (x86)\\Microsoft Visual Studio 14.0\\VC\\bin\\cl.exe"
+LIB_EXE = "C:\\Program Files (x86)\\Microsoft Visual Studio 14.0\\VC\\bin\\lib.exe"
+LINK_EXE = "C:\\Program Files (x86)\\Microsoft Visual Studio 14.0\\VC\\bin\\link.exe"
 
 VERBOSE = False
 TEST = True
@@ -41,8 +41,7 @@ def build_obj_files(project_dir, input_files, pdb_file):
     flags = [
         '/nologo',
         '/c',
-        '/Zi',
-        '/Fd{0}'.format(pdb_file),
+        '/Z7'
     ]
     command = [CL_EXE] + INCLUDE_FLAGS + flags + input_files
     verbose(command)
@@ -64,7 +63,7 @@ def compare_files(f1, f2):
 
 def run_tests():
 
-    shutil.rmtree('tmp_pdb_0')
+    shutil.rmtree('tmp_pdb_0', ignore_errors=True)
     shutil.copytree('testdata', 'tmp_pdb_0')
 
     build_obj_files(
@@ -88,7 +87,7 @@ def run_tests():
 run_tests()
 
 time.sleep(5)
-shutil.rmtree('tmp_pdb_1')
+shutil.rmtree('tmp_pdb_1', ignore_errors=True)
 shutil.copytree('tmp_pdb_0', 'tmp_pdb_1')
 
 run_tests()
