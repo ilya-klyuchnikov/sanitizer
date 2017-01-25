@@ -1,16 +1,32 @@
 # Experimental utilities to make cxx compilation with MSVS compilers deterministic
 
-* `obj.strip(input_file, out_file)` - strips an `obj` file produced by a MSVC compiler removing/modifying following information:
-  * removes `IMAGE_SCN_MEM_DISCARDABLE` sections which do not have `IMAGE_SCN_LNK_COMDAT` attribute
-    (usually, they are `debug$s` and `debug$t` sections).
-  * sets timestamps to `0`
-* `lib.fix_lib_timestamps(input_file, out_file)` - sets all timestamps of a `lib` file (produced by `lib.exe`) to `0`.
-* `pefile.default_timestamp()` - a hack in `pefile` - sets all timestamps of a pe file to 0.
+## The problem
 
-See `obj_test.py` and `pe_test.py` for examples.
+VS tools (`cl.exe`, `link.exe`, `lib.exe`) are not deterministic. Given exactly the same sources, they do not produce
+the same (byte-for-byte) outputs.
 
-* `obj_test.py` - checks that after sanitizing `*.obj` files are similar byte-by-byte.
-* `lib_test.py` - checks `lib.fix_lib_timestamps`
-* `pe_test_projects.py` - creates `*.dll` and `*.exe` files from sanitized object files, fixes all timestamps of the
-  created files (using `pefile` library), checks that fixed files are the same byte-by-byte.
+**Why?** 
 
+- They put so called compilation timestamp into any possible piece of output.
+- They put absolute pats to files into output.
+- For debug builds GUIDs are put into binaries (dll, exe) and debug symbols (pdb files) to be able to match them.
+
+## The scope of current solution
+
+Sanitizer is able to make release builds byte-for-byte deterministic.
+
+**What are release builds?**
+
+- Compilation happens without storing debug information (no `/Zi`, `/ZI` or `/Z7` compiler's flag)
+- Linking wihout pdb files
+
+**How?**
+
+- Fixing compilation timestamps to a default or a predifined deterministic value.
+- Removing the redundant `debug$s` (for release builds) section from object files.
+
+## Usage
+
+- `python release_normalize --input-object=foo.obj --output-object=foo.normalized.obj` - normalizes an object file
+- `python release_normalize --input-lib=foo.lib --output-image=foo.normalized.lib` - normalizes a lib file
+- `python release_normalize --input-image=foo.dll --output-image=foo.normalized.dll` - normalizes an image (dll/exe) file
