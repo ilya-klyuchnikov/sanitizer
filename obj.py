@@ -147,9 +147,9 @@ def process(data, number_of_sections, sections_to_strip):
 
         if section_i in sections_to_strip:
             removed_bytes = removed_bytes + size_of_raw_data + (size_of_relocations)
-            sections.append((0, 0))
+            sections.append((0, 0, 0))
         else:
-            sections.append((max(ptr_to_raw_data - removed_bytes, 0), max(ptr_to_relocations - removed_bytes, 0)))
+            sections.append((max(ptr_to_raw_data - removed_bytes, 0), max(ptr_to_relocations - removed_bytes, 0), size_of_raw_data))
 
         if section_i not in sections_to_strip:
             if size_of_raw_data > 0 and ptr_to_raw_data > 0:
@@ -166,11 +166,8 @@ def write_section_headers(output, data, sections, number_of_sections):
         if section:
             this_start = SECTION_HEADERS_START + section_i * SECTION_HEADER_SIZE
             output.fromstring(data[this_start : this_start + 16])
-            ptr_to_raw_data, ptr_to_relocations = section
-            if ptr_to_raw_data > 0:
-                output.fromstring(data[this_start + 16: this_start + 20])
-            else:
-                output.fromstring(struct.pack('<I', 0))
+            ptr_to_raw_data, ptr_to_relocations, raw_size = section
+            output.fromstring(struct.pack('<I', raw_size))
             # 20 ptr_to_raw_data
             output.fromstring(struct.pack('<I', ptr_to_raw_data))
             # 24 ptr_to_relocations
