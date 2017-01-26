@@ -1,4 +1,4 @@
-# Experimental utilities to make cxx compilation with MSVS compilers deterministic
+# Experimental utilities to make cxx compilation with MSVS compilers deterministic and hermetic
 
 ## The problem
 
