@@ -192,70 +192,6 @@ FileAlignment_Warning = False # We only want to print the warning once
 SectionAlignment_Warning = False # We only want to print the warning once
 
 
-
-class UnicodeStringWrapperPostProcessor(object):
-    """This class attempts to help the process of identifying strings
-    that might be plain Unicode or Pascal. A list of strings will be
-    wrapped on it with the hope the overlappings will help make the
-    decision about their type."""
-
-    def __init__(self, pe, rva_ptr):
-        self.pe = pe
-        self.rva_ptr = rva_ptr
-        self.string = None
-
-    def get_rva(self):
-        """Get the RVA of the string."""
-        return self.rva_ptr
-
-    def __str__(self):
-        """Return the escaped UTF-8 representation of the string."""
-        return self.decode('utf-8', 'backslashreplace')
-
-    def decode(self, *args):
-        if not self.string:
-            return ''
-        return self.string.decode(*args)
-
-    def invalidate(self):
-        """Make this instance None, to express it's no known string type."""
-        self = None
-
-    def render_pascal_16(self):
-        self.string = self.pe.get_string_u_at_rva(
-            self.rva_ptr+2,
-            max_length=self.get_pascal_16_length())
-
-    def get_pascal_16_length(self):
-        return self.__get_word_value_at_rva(self.rva_ptr)
-
-    def __get_word_value_at_rva(self, rva):
-        try:
-            data = self.pe.get_data(self.rva_ptr, 2)
-        except PEFormatError as e:
-            return False
-
-        if len(data)<2:
-            return False
-
-        return struct.unpack('<H', data)[0]
-
-    def ask_unicode_16(self, next_rva_ptr):
-        """The next RVA is taken to be the one immediately following this one.
-
-        Such RVA could indicate the natural end of the string and will be checked
-        to see if there's a Unicode NULL character there.
-        """
-        if self.__get_word_value_at_rva(next_rva_ptr-2) == 0:
-            self.length = next_rva_ptr - self.rva_ptr
-            return True
-
-        return False
-
-    def render_unicode_16(self):
-        self.string = self.pe.get_string_u_at_rva(self.rva_ptr)
-
-
 class PEFormatError(Exception):
     """Generic PE format error exception."""
 
@@ -264,47 +200,6 @@ class PEFormatError(Exception):
 
     def __str__(self):
         return repr(self.value)
-
-
-class Dump(object):
-    """Convenience class for dumping the PE information."""
-
-    def __init__(self):
-        self.text = list()
-
-    def add_lines(self, txt, indent=0):
-        """Adds a list of lines.
-
-        The list can be indented with the optional argument 'indent'.
-        """
-        for line in txt:
-            self.add_line(line, indent)
-
-    def add_line(self, txt, indent=0):
-        """Adds a line.
-
-        The line can be indented with the optional argument 'indent'.
-        """
-        self.add(txt+'\n', indent)
-
-    def add(self, txt, indent=0):
-        """Adds some text, no newline will be appended.
-
-        The text can be indented with the optional argument 'indent'.
-        """
-        self.text.append(u'{0}{1}'.format(' '*indent, txt))
-
-    def add_header(self, txt):
-        """Adds a header element."""
-        self.add_line('{0}{1}{0}\n'.format('-'*10, txt))
-
-    def add_newline(self):
-        """Adds a newline."""
-        self.text.append('\n')
-
-    def get_text(self):
-        """Get the text in its current state."""
-        return u''.join(u'{0}'.format(b) for b in self.text)
 
 
 STRUCT_SIZEOF_TYPES = {
@@ -448,48 +343,6 @@ class Structure(object):
         return struct.pack(self.__format__, *new_values)
 
 
-    def __str__(self):
-        return '\n'.join( self.dump() )
-
-    def __repr__(self):
-        return '<Structure: %s>' % (' '.join( [' '.join(s.split()) for s in self.dump()] ))
-
-
-    def dump(self, indentation=0):
-        """Returns a string representation of the structure."""
-
-        dump = []
-
-        dump.append('[{0}]'.format(self.name))
-
-        printable_bytes = [ord(i) for i in string.printable if i not in string.whitespace]
-
-        # Refer to the __set_format__ method for an explanation
-        # of the following construct.
-        for keys in self.__keys__:
-            for key in keys:
-
-                val = getattr(self, key)
-                if isinstance(val, (int, long)):
-                    val_str = '0x%-8X' % (val)
-                    if key == 'TimeDateStamp' or key == 'dwTimeStamp':
-                        try:
-                            val_str += ' [%s UTC]' % time.asctime(time.gmtime(val))
-                        except exceptions.ValueError as e:
-                            val_str += ' [INVALID TIME]'
-                else:
-                    val_str = bytearray(val)
-                    val_str = ''.join(
-                            [chr(i) if (i in printable_bytes) else
-                             '\\x{0:02x}'.format(i) for i in val_str.rstrip(b'\x00')])
-
-                dump.append('0x%-8X 0x%-3X %-30s %s' % (
-                    self.__field_offsets__[key] + self.__file_offset__,
-                    self.__field_offsets__[key], key+':', val_str))
-
-        return dump
-
-
     def default_timestamp(self):
         for keys in self.__keys__:
             for key in keys:
@@ -623,62 +476,6 @@ class SectionStructure(Structure):
                 size = self.next_section_virtual_address - VirtualAddress_adj
 
         return VirtualAddress_adj <= rva < VirtualAddress_adj + size
-
-
-    def contains(self, rva):
-        #print "DEPRECATION WARNING: you should use contains_rva() instead of contains()"
-        return self.contains_rva(rva)
-
-
-    def get_entropy(self):
-        """Calculate and return the entropy for the section."""
-
-        return self.entropy_H( self.get_data() )
-
-
-    def get_hash_sha1(self):
-        """Get the SHA-1 hex-digest of the section's data."""
-
-        if sha1 is not None:
-            return sha1( self.get_data() ).hexdigest()
-
-
-    def get_hash_sha256(self):
-        """Get the SHA-256 hex-digest of the section's data."""
-
-        if sha256 is not None:
-            return sha256( self.get_data() ).hexdigest()
-
-
-    def get_hash_sha512(self):
-        """Get the SHA-512 hex-digest of the section's data."""
-
-        if sha512 is not None:
-            return sha512( self.get_data() ).hexdigest()
-
-
-    def get_hash_md5(self):
-        """Get the MD5 hex-digest of the section's data."""
-
-        if md5 is not None:
-            return md5( self.get_data() ).hexdigest()
-
-
-    def entropy_H(self, data):
-        """Calculate the entropy of a chunk of data."""
-
-        if len(data) == 0:
-            return 0.0
-
-        occurences = Counter(bytearray(data))
-
-        entropy = 0
-        for x in occurences.values():
-            p_x = float(x) / len(data)
-            entropy -= p_x*math.log(p_x, 2)
-
-        return entropy
-
 
 
 class DataContainer(object):
