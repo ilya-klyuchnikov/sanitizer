@@ -1626,7 +1626,7 @@ class PE(object):
     __IMAGE_BOUND_FORWARDER_REF_format__ = ('IMAGE_BOUND_FORWARDER_REF',
         ('I,TimeDateStamp', 'H,OffsetModuleName', 'H,Reserved') )
 
-    def __init__(self, name=None, data=None, fast_load=None):
+    def __init__(self, name=None, data=None):
 
         self.sections = []
 
@@ -1643,10 +1643,8 @@ class PE(object):
         self.__structures__ = []
         self.__from_file = None
 
-        if not fast_load:
-            fast_load = globals()['fast_load']
         try:
-            self.__parse__(name, data, fast_load)
+            self.__parse__(name, data)
         except:
             self.close()
             raise
@@ -1681,7 +1679,7 @@ class PE(object):
         return structure
 
 
-    def __parse__(self, fname, data, fast_load):
+    def __parse__(self, fname, data):
         """Parse a Portable Executable file.
 
         Loads a PE file, parsing all its structures and making them available
@@ -2001,19 +1999,17 @@ class PE(object):
                 'AddressOfEntryPoint: 0x%x' %
                 self.OPTIONAL_HEADER.AddressOfEntryPoint )
 
+        self.parse_data_directories()
 
-        if not fast_load:
-            self.parse_data_directories()
-
-            class RichHeader(object):
-                pass
-            rich_header = self.parse_rich_header()
-            if rich_header:
-                self.RICH_HEADER = RichHeader()
-                self.RICH_HEADER.checksum = rich_header.get('checksum', None)
-                self.RICH_HEADER.values = rich_header.get('values', None)
-            else:
-                self.RICH_HEADER = None
+        class RichHeader(object):
+            pass
+        rich_header = self.parse_rich_header()
+        if rich_header:
+            self.RICH_HEADER = RichHeader()
+            self.RICH_HEADER.checksum = rich_header.get('checksum', None)
+            self.RICH_HEADER.values = rich_header.get('values', None)
+        else:
+            self.RICH_HEADER = None
 
 
     def parse_rich_header(self):
