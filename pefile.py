@@ -153,10 +153,6 @@ SECTION_CHARACTERISTICS = dict([(e[1], e[0]) for e in
     section_characteristics]+section_characteristics)
 
 
-def power_of_two(val):
-    return val != 0 and (val & (val-1)) == 0
-
-
 # These come from the great article[1] which contains great insights on
 # working with unicode in both Python 2 and 3.
 # [1]: http://python3porting.com/problems.html
@@ -471,225 +467,12 @@ class DataContainer(object):
         for key, value in list(args.items()):
             bare_setattr(key, value)
 
-
-
-class ImportDescData(DataContainer):
-    """Holds import descriptor information.
-
-    dll:        name of the imported DLL
-    imports:    list of imported symbols (ImportData instances)
-    struct:     IMAGE_IMPORT_DESCRIPTOR structure
-    """
-
-class ImportData(DataContainer):
-    """Holds imported symbol's information.
-
-    ordinal:    Ordinal of the symbol
-    name:       Name of the symbol
-    bound:      If the symbol is bound, this contains
-                the address.
-    """
-
-    def __setattr__(self, name, val):
-        self.__dict__[name] = val
-
-
-class ExportDirData(DataContainer):
-    """Holds export directory information.
-
-    struct:     IMAGE_EXPORT_DIRECTORY structure
-    symbols:    list of exported symbols (ExportData instances)
-"""
-
-class ExportData(DataContainer):
-    """Holds exported symbols' information.
-
-    ordinal:    ordinal of the symbol
-    address:    address of the symbol
-    name:       name of the symbol (None if the symbol is
-                exported by ordinal only)
-    forwarder:  if the symbol is forwarded it will
-                contain the name of the target symbol,
-                None otherwise.
-    """
-
-    def __setattr__(self, name, val):
-        self.__dict__[name] = val
-
-
-class ResourceDirData(DataContainer):
-    """Holds resource directory information.
-
-    struct:     IMAGE_RESOURCE_DIRECTORY structure
-    entries:    list of entries (ResourceDirEntryData instances)
-    """
-
-class ResourceDirEntryData(DataContainer):
-    """Holds resource directory entry data.
-
-    struct:     IMAGE_RESOURCE_DIRECTORY_ENTRY structure
-    name:       If the resource is identified by name this
-                attribute will contain the name string. None
-                otherwise. If identified by id, the id is
-                available at 'struct.Id'
-    id:         the id, also in struct.Id
-    directory:  If this entry has a lower level directory
-                this attribute will point to the
-                ResourceDirData instance representing it.
-    data:       If this entry has no further lower directories
-                and points to the actual resource data, this
-                attribute will reference the corresponding
-                ResourceDataEntryData instance.
-    (Either of the 'directory' or 'data' attribute will exist,
-    but not both.)
-    """
-
-class ResourceDataEntryData(DataContainer):
-    """Holds resource data entry information.
-
-    struct:     IMAGE_RESOURCE_DATA_ENTRY structure
-    lang:       Primary language ID
-    sublang:    Sublanguage ID
-    """
-
 class DebugData(DataContainer):
     """Holds debug information.
 
     struct:     IMAGE_DEBUG_DIRECTORY structure
     entries:    list of entries (IMAGE_DEBUG_TYPE instances)
     """
-
-class BaseRelocationData(DataContainer):
-    """Holds base relocation information.
-
-    struct:     IMAGE_BASE_RELOCATION structure
-    entries:    list of relocation data (RelocationData instances)
-    """
-
-class RelocationData(DataContainer):
-    """Holds relocation information.
-
-    type:       Type of relocation
-                The type string is can be obtained by
-                RELOCATION_TYPE[type]
-    rva:        RVA of the relocation
-    """
-    def __setattr__(self, name, val):
-
-        # If the instance doesn't yet have a struct attribute
-        # it's not fully initialized so can't do any of the
-        # following
-        #
-        if hasattr(self, 'struct'):
-            # Get the word containing the type and data
-            #
-            word = self.struct.Data
-
-            if name == 'type':
-                word = (val << 12) | (word & 0xfff)
-            elif name == 'rva':
-                offset = val-self.base_rva
-                if offset < 0:
-                    offset = 0
-                word = ( word & 0xf000) | ( offset & 0xfff)
-
-            # Store the modified data
-            #
-            self.struct.Data = word
-
-        self.__dict__[name] = val
-
-class TlsData(DataContainer):
-    """Holds TLS information.
-
-    struct:     IMAGE_TLS_DIRECTORY structure
-    """
-
-class BoundImportDescData(DataContainer):
-    """Holds bound import descriptor data.
-
-    This directory entry will provide with information on the
-    DLLs this PE files has been bound to (if bound at all).
-    The structure will contain the name and timestamp of the
-    DLL at the time of binding so that the loader can know
-    whether it differs from the one currently present in the
-    system and must, therefore, re-bind the PE's imports.
-
-    struct:     IMAGE_BOUND_IMPORT_DESCRIPTOR structure
-    name:       DLL name
-    entries:    list of entries (BoundImportRefData instances)
-                the entries will exist if this DLL has forwarded
-                symbols. If so, the destination DLL will have an
-                entry in this list.
-    """
-
-class LoadConfigData(DataContainer):
-    """Holds Load Config data.
-
-    struct:     IMAGE_LOAD_CONFIG_DIRECTORY structure
-    name:       dll name
-    """
-
-class BoundImportRefData(DataContainer):
-    """Holds bound import forwarder reference data.
-
-    Contains the same information as the bound descriptor but
-    for forwarded DLLs, if any.
-
-    struct:     IMAGE_BOUND_FORWARDER_REF structure
-    name:       dll name
-    """
-
-
-# Valid FAT32 8.3 short filename characters according to:
-#  http://en.wikipedia.org/wiki/8.3_filename
-# This will help decide whether DLL ASCII names are likely
-# to be valid or otherwise corrupt data
-#
-# The filename length is not checked because the DLLs filename
-# can be longer that the 8.3
-
-if PY3:
-    allowed_filename = b(
-        string.ascii_lowercase + string.ascii_uppercase +
-        string.digits + "!#$%&'()-@^_`{}~+,.;=[]")
-else: # Python 2.x
-    allowed_filename = b(
-        string.lowercase + string.uppercase + string.digits +
-        b"!#$%&'()-@^_`{}~+,.;=[]")
-
-def is_valid_dos_filename(s):
-    if s is None or not isinstance(s, (str, bytes)):
-        return False
-    # Allow path separators as import names can contain directories.
-    allowed = allowed_filename + b'\\/'
-    for c in set(s):
-        if c not in allowed:
-            return False
-    return True
-
-
-# Check if a imported name uses the valid accepted characters expected in mangled
-# function names. If the symbol's characters don't fall within this charset
-# we will assume the name is invalid
-#
-if PY3:
-    allowed_function_name = b(
-        string.ascii_lowercase + string.ascii_uppercase +
-        string.digits + '_?@$()<>')
-else:
-    allowed_function_name = b(
-        string.lowercase + string.uppercase +
-        string.digits + b'_?@$()<>')
-
-def is_valid_function_name(s):
-    if s is None or not isinstance(s, (str, bytes)):
-        return False
-    for c in set(s):
-        if c not in allowed_function_name:
-            return False
-    return True
-
 
 
 class PE(object):
@@ -1335,6 +1118,7 @@ class PE(object):
         directory_parsing = (
             ('IMAGE_DIRECTORY_ENTRY_IMPORT', self.parse_import_directory),
             ('IMAGE_DIRECTORY_ENTRY_EXPORT', self.parse_export_directory),
+            ('IMAGE_DIRECTORY_ENTRY_RESOURCE', self.parse_resources_directory),
             ('IMAGE_DIRECTORY_ENTRY_DEBUG', self.parse_debug_directory),
             ('IMAGE_DIRECTORY_ENTRY_BASERELOC', self.parse_relocations_directory),
             ('IMAGE_DIRECTORY_ENTRY_TLS', self.parse_directory_tls),
@@ -1466,7 +1250,7 @@ class PE(object):
             format = self.__IMAGE_TLS_DIRECTORY64_format__
 
         try:
-            tls_struct = self.__unpack_data__(
+            self.__unpack_data__(
                 format,
                 self.get_data( rva, Structure(format).sizeof() ),
                 file_offset = self.get_offset_from_rva(rva))
@@ -1474,12 +1258,6 @@ class PE(object):
             self.__warnings.append(
                 'Invalid TLS information. Can\'t read '
                 'data at RVA: 0x%x' % rva)
-            tls_struct = None
-
-        if not tls_struct:
-            return None
-
-        return TlsData( struct = tls_struct )
 
 
     def parse_directory_load_config(self, rva, size):
@@ -1492,7 +1270,7 @@ class PE(object):
             format = self.__IMAGE_LOAD_CONFIG_DIRECTORY64_format__
 
         try:
-            load_config_struct = self.__unpack_data__(
+            self.__unpack_data__(
                 format,
                 self.get_data( rva, Structure(format).sizeof() ),
                 file_offset = self.get_offset_from_rva(rva))
@@ -1500,13 +1278,6 @@ class PE(object):
             self.__warnings.append(
                 'Invalid LOAD_CONFIG information. Can\'t read '
                 'data at RVA: 0x%x' % rva)
-            load_config_struct = None
-
-        if not load_config_struct:
-            return None
-
-        return LoadConfigData( struct = load_config_struct )
-
 
     def parse_relocations_directory(self, rva, size):
         """"""
@@ -1681,6 +1452,53 @@ class PE(object):
                     entry = dbg_type))
 
         return debug
+
+    def parse_resources_directory(self, rva, size=0, base_rva = None, level = 0, dirs=None):
+        """Parse the resources directory.
+
+        Given the RVA of the resources directory, it will process all
+        its entries.
+
+        The root will have the corresponding member of its structure,
+        IMAGE_RESOURCE_DIRECTORY plus 'entries', a list of all the
+        entries in the directory.
+
+        Those entries will have, correspondingly, all the structure's
+        members (IMAGE_RESOURCE_DIRECTORY_ENTRY) and an additional one,
+        "directory", pointing to the IMAGE_RESOURCE_DIRECTORY structure
+        representing upper layers of the tree. This one will also have
+        an 'entries' attribute, pointing to the 3rd, and last, level.
+        Another directory with more entries. Those last entries will
+        have a new attribute (both 'leaf' or 'data_entry' can be used to
+        access it). This structure finally points to the resource data.
+        All the members of this structure, IMAGE_RESOURCE_DATA_ENTRY,
+        are available as its attributes.
+        """
+
+        try:
+            # If the RVA is invalid all would blow up. Some EXEs seem to be
+            # specially nasty and have an invalid RVA.
+            data = self.get_data(rva, Structure(self.__IMAGE_RESOURCE_DIRECTORY_format__).sizeof() )
+        except PEFormatError as e:
+            self.__warnings.append(
+                'Invalid resources directory. Can\'t read '
+                'directory data at RVA: 0x%x' % rva)
+            return None
+
+        # Get the resource directory structure, that is, the header
+        # of the table preceding the actual entries
+        #
+        resource_dir = self.__unpack_data__(
+            self.__IMAGE_RESOURCE_DIRECTORY_format__, data,
+            file_offset = self.get_offset_from_rva(rva) )
+        if resource_dir is None:
+            # If can't parse resources directory then silently return.
+            # This directory does not necessarily have to be valid to
+            # still have a valid PE file
+            self.__warnings.append(
+                'Invalid resources directory. Can\'t parse '
+                'directory data at RVA: 0x%x' % rva)
+            return None
 
 
     def parse_export_directory(self, rva, size, forwarded_only=False):
