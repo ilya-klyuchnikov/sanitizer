@@ -9,15 +9,9 @@ install:
 build: off
 
 build_script:
-  - "python obj_test.py"
-  - "python lib_test.py"
-  - "python pe_test_projects.py"
+  - "python tests.py"
 
 artifacts:
   - path: tmp
-    name: obj
+    name: tmp
     type: zip
-  - path: tmp-lib
-    name: lib
-    type: zip
-
