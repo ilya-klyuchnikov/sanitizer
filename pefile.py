@@ -2375,9 +2375,7 @@ class PE(object):
 
 
 
-    def parse_data_directories(self, directories=None,
-                               forwarded_exports_only=False,
-                               import_dllnames_only=False):
+    def parse_data_directories(self, directories=None):
         """Parse and process the PE file's data directories.
 
         If the optional argument 'directories' is given, only
@@ -2436,13 +2434,7 @@ class PE(object):
             if directories is None or directory_index in directories:
 
                 if dir_entry.VirtualAddress:
-                    if forwarded_exports_only and entry[0] == 'IMAGE_DIRECTORY_ENTRY_EXPORT':
-                        value = entry[1](dir_entry.VirtualAddress, dir_entry.Size, forwarded_only=True)
-                    elif import_dllnames_only and entry[0] == 'IMAGE_DIRECTORY_ENTRY_IMPORT':
-                        value = entry[1](dir_entry.VirtualAddress, dir_entry.Size, dllnames_only=True)
-
-                    else:
-                        value = entry[1](dir_entry.VirtualAddress, dir_entry.Size)
+                    value = entry[1](dir_entry.VirtualAddress, dir_entry.Size)
                     if value:
                         setattr(self, entry[0][6:], value)
 
@@ -3724,39 +3716,6 @@ class PE(object):
                         dll = dll))
 
         return import_descs
-
-
-    def get_imphash(self):
-        impstrs = []
-        exts = ['ocx', 'sys', 'dll']
-        if not hasattr(self, "DIRECTORY_ENTRY_IMPORT"):
-            return ""
-        for entry in self.DIRECTORY_ENTRY_IMPORT:
-            if isinstance(entry.dll, bytes):
-                libname = entry.dll.decode().lower()
-            else:
-                libname = entry.dll.lower()
-            parts = libname.rsplit('.', 1)
-            if len(parts) > 1 and parts[1] in exts:
-                libname = parts[0]
-
-            for imp in entry.imports:
-                funcname = None
-                if not imp.name:
-                    funcname = ordlookup.ordLookup(entry.dll.lower(), imp.ordinal, make_name=True)
-                    if not funcname:
-                        raise Exception("Unable to look up ordinal %s:%04x" % (entry.dll, imp.ordinal))
-                else:
-                    funcname = imp.name
-
-                if not funcname:
-                    continue
-
-                if isinstance(funcname, bytes):
-                    funcname = funcname.decode()
-                impstrs.append('%s.%s' % (libname.lower(),funcname.lower()))
-
-        return md5( ','.join( impstrs ).encode() ).hexdigest()
 
 
     def parse_import_directory(self, rva, size, dllnames_only=False):

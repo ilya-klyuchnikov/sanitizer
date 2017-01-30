@@ -31,6 +31,7 @@ TESTS = [
     "testdata/01",
     "testdata/02",
     "testdata/03",
+    "testdata/04",
 ]
 
 
