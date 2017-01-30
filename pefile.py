@@ -2532,92 +2532,35 @@ class PE(object):
 
     def parse_delay_import_directory(self, rva, size):
         """Walk and parse the delay import directory."""
-
-        import_descs =  []
-        error_count = 0
         while True:
             try:
                 # If the RVA is invalid all would blow up. Some PEs seem to be
                 # specially nasty and have an invalid RVA.
-                data = self.get_data( rva, Structure(self.__IMAGE_DELAY_IMPORT_DESCRIPTOR_format__).sizeof() )
+                data = self.get_data(rva, Structure(self.__IMAGE_DELAY_IMPORT_DESCRIPTOR_format__).sizeof())
             except PEFormatError as e:
                 self.__warnings.append(
                     'Error parsing the Delay import directory at RVA: 0x%x' % ( rva ) )
                 break
 
             file_offset = self.get_offset_from_rva(rva)
-            import_desc =  self.__unpack_data__(
+            import_desc = self.__unpack_data__(
                 self.__IMAGE_DELAY_IMPORT_DESCRIPTOR_format__,
                 data, file_offset = file_offset )
-
 
             # If the structure is all zeros, we reached the end of the list
             if not import_desc or import_desc.all_zeroes():
                 break
 
-
             rva += import_desc.sizeof()
-
-            # If the array of thunk's is somewhere earlier than the import
-            # descriptor we can set a maximum length for the array. Otherwise
-            # just set a maximum length of the size of the file
-            max_len = len(self.__data__) - file_offset
-            if rva > import_desc.pINT or rva > import_desc.pIAT:
-                max_len = max(rva-import_desc.pINT, rva-import_desc.pIAT)
-
-            import_data = []
-            try:
-                import_data =  self.parse_imports(
-                    import_desc.pINT,
-                    import_desc.pIAT,
-                    None,
-                    max_length = max_len)
-            except PEFormatError as e:
-                self.__warnings.append(
-                    'Error parsing the Delay import directory. '
-                    'Invalid import data at RVA: 0x{0:x} ({1})'.format(
-                        rva, e.value))
-
-            if error_count > 5:
-                self.__warnings.append(
-                    'Too may errors parsing the Delay import directory. '
-                    'Invalid import data at RVA: 0x{0:x}'.format(rva) )
-                break
-
-            if not import_data:
-                error_count += 1
-                continue
-
-            dll = self.get_string_at_rva(import_desc.szName, MAX_DLL_LENGTH)
-            if not is_valid_dos_filename(dll):
-                dll = b('*invalid*')
-
-            if dll:
-                for symbol in import_data:
-                    if symbol.name is None:
-                        funcname = ordlookup.ordLookup(dll.lower(), symbol.ordinal)
-                        if funcname:
-                            symbol.name = funcname
-                import_descs.append(
-                    ImportDescData(
-                        struct = import_desc,
-                        imports = import_data,
-                        dll = dll))
-
-        return import_descs
 
 
     def parse_import_directory(self, rva, size, dllnames_only=False):
         """Walk and parse the import directory."""
-
-        import_descs =  []
-        error_count = 0
         while True:
             try:
                 # If the RVA is invalid all would blow up. Some EXEs seem to be
                 # specially nasty and have an invalid RVA.
-                data = self.get_data(rva, Structure(
-                        self.__IMAGE_IMPORT_DESCRIPTOR_format__).sizeof() )
+                data = self.get_data(rva, Structure(self.__IMAGE_IMPORT_DESCRIPTOR_format__).sizeof())
             except PEFormatError as e:
                 self.__warnings.append(
                     'Error parsing the import directory at RVA: 0x%x' % ( rva ) )
@@ -2633,73 +2576,6 @@ class PE(object):
                 break
 
             rva += import_desc.sizeof()
-
-            # If the array of thunk's is somewhere earlier than the import
-            # descriptor we can set a maximum length for the array. Otherwise
-            # just set a maximum length of the size of the file
-            max_len = len(self.__data__) - file_offset
-            if rva > import_desc.OriginalFirstThunk or rva > import_desc.FirstThunk:
-                max_len = max(rva-import_desc.OriginalFirstThunk, rva-import_desc.FirstThunk)
-
-            import_data = []
-            if not dllnames_only:
-                try:
-                    import_data =  self.parse_imports(
-                        import_desc.OriginalFirstThunk,
-                        import_desc.FirstThunk,
-                        import_desc.ForwarderChain,
-                        max_length = max_len)
-                except PEFormatError as e:
-                    self.__warnings.append(
-                        'Error parsing the import directory. '
-                        'Invalid Import data at RVA: 0x{0:x} ({1})'.format(
-                            rva, e.value))
-
-                if error_count > 5:
-                    self.__warnings.append(
-                        'Too may errors parsing the import directory. '
-                        'Invalid import data at RVA: 0x{0:x}'.format(rva) )
-                    break
-
-                if not import_data:
-                    error_count += 1
-                    # TODO: do not continue here
-                    continue
-
-            dll = self.get_string_at_rva(import_desc.Name, MAX_DLL_LENGTH)
-            if not is_valid_dos_filename(dll):
-                dll = b('*invalid*')
-
-            if dll:
-                for symbol in import_data:
-                    if symbol.name is None:
-                        funcname = ordlookup.ordLookup(dll.lower(), symbol.ordinal)
-                        if funcname:
-                            symbol.name = funcname
-                import_descs.append(
-                    ImportDescData(
-                        struct = import_desc,
-                        imports = import_data,
-                        dll = dll))
-
-        if not dllnames_only:
-            suspicious_imports = set([ u'LoadLibrary', u'GetProcAddress' ])
-            suspicious_imports_count = 0
-            total_symbols = 0
-            for imp_dll in import_descs:
-                for symbol in imp_dll.imports:
-                    for suspicious_symbol in suspicious_imports:
-                        if symbol and symbol.name and symbol.name.startswith(
-                            b(suspicious_symbol)):
-                            suspicious_imports_count += 1
-                            break
-                    total_symbols += 1
-            if suspicious_imports_count == len(suspicious_imports) and total_symbols < 20:
-                self.__warnings.append(
-                    'Imported symbols contain entries typical of packed executables.' )
-
-        return import_descs
-
 
 
     def parse_imports(
@@ -2958,30 +2834,6 @@ class PE(object):
             table.append(thunk_data)
 
         return table
-
-
-    def get_resources_strings(self):
-        """Returns a list of all the strings found withing the resources (if any).
-
-        This method will scan all entries in the resources directory of the PE, if
-        there is one, and will return a list() with the strings.
-
-        An empty list will be returned otherwise.
-        """
-
-        resources_strings = list()
-
-        if hasattr(self, 'DIRECTORY_ENTRY_RESOURCE'):
-
-            for resource_type in self.DIRECTORY_ENTRY_RESOURCE.entries:
-                if hasattr(resource_type, 'directory'):
-                    for resource_id in resource_type.directory.entries:
-                        if hasattr(resource_id, 'directory'):
-                            if hasattr(resource_id.directory, 'strings') and resource_id.directory.strings:
-                                for res_string in list(resource_id.directory.strings.values()):
-                                    resources_strings.append( res_string )
-
-        return resources_strings
 
 
     def get_data(self, rva=0, length=None):
