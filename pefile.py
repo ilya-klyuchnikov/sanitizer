@@ -1728,20 +1728,7 @@ class PE(object):
         if ( self.OPTIONAL_HEADER is None and
             len(self.__data__[optional_header_offset:optional_header_offset+0x200])
                 >= MINIMUM_VALID_OPTIONAL_HEADER_RAW_SIZE ):
-
-            # Add enough zeros to make up for the unused fields
-            #
-            padding_length = 128
-
-            # Create padding
-            #
-            padded_data = self.__data__[optional_header_offset:optional_header_offset+0x200] + (
-                b'\0' * padding_length)
-
-            self.OPTIONAL_HEADER = self.__unpack_data__(
-                self.__IMAGE_OPTIONAL_HEADER_format__,
-                padded_data,
-                file_offset = optional_header_offset)
+            raise Exception("removed code")
 
 
         # Check the Magic in the OPTIONAL_HEADER and set the PE file
@@ -1772,14 +1759,7 @@ class PE(object):
                 if ( self.OPTIONAL_HEADER is None and
                     len(self.__data__[optional_header_offset:optional_header_offset+0x200])
                         >= MINIMUM_VALID_OPTIONAL_HEADER_RAW_SIZE ):
-
-                    padding_length = 128
-                    padded_data = self.__data__[optional_header_offset:optional_header_offset+0x200] + (
-                        b'\0' * padding_length)
-                    self.OPTIONAL_HEADER = self.__unpack_data__(
-                        self.__IMAGE_OPTIONAL_HEADER64_format__,
-                        padded_data,
-                        file_offset = optional_header_offset)
+                    raise Exception("removed code")
 
 
         if not self.FILE_HEADER:
@@ -1791,44 +1771,19 @@ class PE(object):
         # 975440f5ad5e2e4a92c4d9a5f22f75c1
         if self.OPTIONAL_HEADER is None:
             raise PEFormatError("No Optional Header found, invalid PE32 or PE32+ file.")
-        if self.PE_TYPE is None:
-            self.__warnings.append(
-                "Invalid type 0x{0:04x} in Optional Header.".format(
-                    self.OPTIONAL_HEADER.Magic))
 
         self.OPTIONAL_HEADER.DATA_DIRECTORY = []
-        #offset = (optional_header_offset + self.FILE_HEADER.SizeOfOptionalHeader)
         offset = (optional_header_offset + self.OPTIONAL_HEADER.sizeof())
 
 
         self.NT_HEADERS.FILE_HEADER = self.FILE_HEADER
         self.NT_HEADERS.OPTIONAL_HEADER = self.OPTIONAL_HEADER
 
-        # Windows 8 specific check
-        #
-        if self.OPTIONAL_HEADER.AddressOfEntryPoint <  self.OPTIONAL_HEADER.SizeOfHeaders:
-            self.__warnings.append(
-                'SizeOfHeaders is smaller than AddressOfEntryPoint: this file cannot run under Windows 8.')
-
-        # The NumberOfRvaAndSizes is sanitized to stay within
-        # reasonable limits so can be casted to an int
-        #
-        if self.OPTIONAL_HEADER.NumberOfRvaAndSizes > 0x10:
-            self.__warnings.append(
-                'Suspicious NumberOfRvaAndSizes in the Optional Header. '
-                'Normal values are never larger than 0x10, the value is: 0x%x' %
-                self.OPTIONAL_HEADER.NumberOfRvaAndSizes )
-
         MAX_ASSUMED_VALID_NUMBER_OF_RVA_AND_SIZES = 0x100
+        # TODO ILYA - can it be simplified?
         for i in range(int(0x7fffffff & self.OPTIONAL_HEADER.NumberOfRvaAndSizes)):
 
-            if len(self.__data__) - offset == 0:
-                break
-
-            if len(self.__data__) - offset < 8:
-                data = self.__data__[offset:] + b'\0'*8
-            else:
-                data = self.__data__[offset:offset+MAX_ASSUMED_VALID_NUMBER_OF_RVA_AND_SIZES]
+            data = self.__data__[offset:offset+MAX_ASSUMED_VALID_NUMBER_OF_RVA_AND_SIZES]
 
             dir_entry = self.__unpack_data__(
                 self.__IMAGE_DATA_DIRECTORY_format__,
@@ -1848,21 +1803,6 @@ class PE(object):
             offset += dir_entry.sizeof()
 
             self.OPTIONAL_HEADER.DATA_DIRECTORY.append(dir_entry)
-
-            # If the offset goes outside the optional header,
-            # the loop is broken, regardless of how many directories
-            # NumberOfRvaAndSizes says there are
-            #
-            # We assume a normally sized optional header, hence that we do
-            # a sizeof() instead of reading SizeOfOptionalHeader.
-            # Then we add a default number of directories times their size,
-            # if we go beyond that, we assume the number of directories
-            # is wrong and stop processing
-            if offset >= (optional_header_offset +
-                self.OPTIONAL_HEADER.sizeof() + 8*16) :
-
-                break
-
 
         offset = self.parse_sections(sections_offset)
 
@@ -4080,18 +4020,7 @@ class PE(object):
     #
     # The following is a hard-coded constant if the Windows loader
     def adjust_FileAlignment( self, val, file_alignment ):
-        global FileAlignment_Warning
-        if file_alignment > FILE_ALIGNEMNT_HARDCODED_VALUE:
-            # If it's not a power of two, report it:
-            if not power_of_two(file_alignment) and FileAlignment_Warning is False:
-                self.__warnings.append(
-                    'If FileAlignment > 0x200 it should be a power of 2. Value: %x' % (
-                        file_alignment)  )
-                FileAlignment_Warning = True
-
-        if file_alignment < FILE_ALIGNEMNT_HARDCODED_VALUE:
-            return val
-        return (int(val / 0x200)) * 0x200
+        return val
 
 
     # According to the document:
