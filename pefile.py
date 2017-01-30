@@ -1360,26 +1360,17 @@ class PE(object):
         self.NT_HEADERS.OPTIONAL_HEADER = self.OPTIONAL_HEADER
 
         MAX_ASSUMED_VALID_NUMBER_OF_RVA_AND_SIZES = 0x100
-        # TODO ILYA - can it be simplified? - it can be simplified later
-        for i in range(int(0x7fffffff & self.OPTIONAL_HEADER.NumberOfRvaAndSizes)):
 
-            data = self.__data__[offset:offset+MAX_ASSUMED_VALID_NUMBER_OF_RVA_AND_SIZES]
+        for i in range(int(0x7fffffff & self.OPTIONAL_HEADER.NumberOfRvaAndSizes)):
+            my_descr = Structure(self.__IMAGE_DATA_DIRECTORY_format__)
+            my_descr_size = my_descr.sizeof()
+            data = self.__data__[offset:offset+my_descr_size]
 
             dir_entry = self.__unpack_data__(
                 self.__IMAGE_DATA_DIRECTORY_format__,
                 data,
                 file_offset = offset)
-
-            if dir_entry is None:
-                break
-
-            # Would fail if missing an entry
-            # 1d4937b2fa4d84ad1bce0309857e70ca offending sample
-            try:
-                dir_entry.name = DIRECTORY_ENTRY[i]
-            except (KeyError, AttributeError):
-                break
-
+            dir_entry.name = DIRECTORY_ENTRY[i]
             offset += dir_entry.sizeof()
 
             self.OPTIONAL_HEADER.DATA_DIRECTORY.append(dir_entry)
@@ -1579,9 +1570,7 @@ class PE(object):
                 break
 
             if dir_entry.VirtualAddress:
-                value = entry[1](dir_entry.VirtualAddress, dir_entry.Size)
-                if value:
-                    setattr(self, entry[0][6:], value)
+                entry[1](dir_entry.VirtualAddress, dir_entry.Size)
 
 
 
