@@ -1,0 +1,92 @@
+{
+  "test_dir" : "03",
+  "steps": [
+    {
+      "compile" : {
+        "flags": ["/c", "/nologo", "hello.c", "/Fohello.obj"]
+      }
+    },
+    {
+      "fix_obj" : {
+        "input": "hello.obj",
+        "output": "hello.x.obj"
+      }
+    },
+    {
+      "compile" : {
+        "flags": ["/c", "/nologo", "main.c", "/Fomain.obj"]
+      }
+    },
+    {
+      "fix_obj" : {
+        "input": "main.obj",
+        "output": "main.x.obj"
+      }
+    },
+    {
+      "lib" : {
+        "flags": ["hello.obj", "/out:hello.lib"]
+      }
+    },
+    {
+      "lib" : {
+        "flags": ["hello.x.obj", "/out:hello.x.lib"]
+      }
+    },
+    {
+      "fix_lib" : {
+        "input": "hello.x.lib",
+        "output": "hello.x.0.lib"
+      }
+    },
+    {
+      "link" : {
+        "flags": ["/nologo", "main.obj", "hello.lib", "/out:main.exe"]
+      }
+    },
+    {
+      "link" : {
+        "flags": ["/nologo", "main.x.obj", "hello.x.0.lib", "/out:main.x.exe"]
+      }
+    },
+    {
+      "fix_pe" : {
+        "input": "main.x.exe",
+        "output": "main.x.0.exe"
+      }
+    },
+    {
+      "fix_pe" : {
+        "input": "main.exe",
+        "output": "main.0.exe"
+      }
+    },
+    {
+      "compare": {
+        "file1" : "main.0.exe",
+        "file2" : "main.x.0.exe"
+      }
+    },
+    {
+      "compare": {
+        "file1" : "_main.0.exe",
+        "file2" : "main.x.0.exe"
+      }
+    },
+    {
+      "compare": {
+        "file1" : "_hello.x.obj",
+        "file2" : "hello.x.obj"
+      }
+    }
+    ,
+    {
+      "compare": {
+        "file1" : "_hello.x.0.lib",
+        "file2" : "hello.x.0.lib"
+      }
+    }
+  ]
+}
+
+

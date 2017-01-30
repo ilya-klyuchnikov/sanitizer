@@ -39,6 +39,18 @@
         "file1" : "main.0.exe",
         "file2" : "main.x.0.exe"
       }
+    },
+    {
+      "compare": {
+        "file1" : "_main.0.exe",
+        "file2" : "main.x.0.exe"
+      }
+    },
+    {
+      "compare": {
+        "file1" : "_main.x.obj",
+        "file2" : "main.x.obj"
+      }
     }
   ]
 }
