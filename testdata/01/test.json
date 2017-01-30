@@ -51,6 +51,18 @@
         "file1" : "_main.x.obj",
         "file2" : "main.x.obj"
       }
+    },
+    {
+      "diff": {
+        "file1" : "main.obj",
+        "file2" : "main.x.obj"
+      }
+    },
+    {
+      "diff": {
+        "file1" : "main.exe",
+        "file2" : "main.x.0.exe"
+      }
     }
   ]
 }

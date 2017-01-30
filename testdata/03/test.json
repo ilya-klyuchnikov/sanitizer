@@ -78,11 +78,16 @@
         "file1" : "_hello.x.obj",
         "file2" : "hello.x.obj"
       }
-    }
-    ,
+    },
     {
       "compare": {
         "file1" : "_hello.x.0.lib",
+        "file2" : "hello.x.0.lib"
+      }
+    },
+    {
+      "diff": {
+        "file1" : "hello.lib",
         "file2" : "hello.x.0.lib"
       }
     }

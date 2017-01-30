@@ -49,6 +49,8 @@ def execute_step(test_dir, step):
         fix_lib(test_dir, step["fix_lib"]["input"], step["fix_lib"]["output"])
     elif "compare" in step:
         compare(test_dir, step["compare"]["file1"], step["compare"]["file2"])
+    elif "diff" in step:
+        diff(test_dir, step["diff"]["file1"], step["diff"]["file2"])
     else:
         raise Exception("cannot parse {0}".format(step))
 
@@ -104,6 +106,14 @@ def compare(test_dir, f1, f2):
     print("{0} <==> {1}".format(input_f1, input_f2))
     with open(input_f1, 'rb') as file1, open(input_f2, 'rb') as file2:
         assert file1.read() == file2.read()
+
+
+def diff(test_dir, f1, f2):
+    input_f1 = "{0}/{1}".format(test_dir, f1)
+    input_f2 = "{0}/{1}".format(test_dir, f2)
+    print("{0} <=/=> {1}".format(input_f1, input_f2))
+    with open(input_f1, 'rb') as file1, open(input_f2, 'rb') as file2:
+        assert file1.read() != file2.read()
 
 
 def exec_test(t):
