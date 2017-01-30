@@ -584,34 +584,6 @@ def parse_strings(data, counter, l):
         counter += 1
 
 
-def retrieve_flags(flag_dict, flag_filter):
-    """Read the flags from a dictionary and return them in a usable form.
-
-    Will return a list of (flag, value) for all flags in "flag_dict"
-    matching the filter "flag_filter".
-    """
-
-    return [(f[0], f[1]) for f in list(flag_dict.items()) if
-            isinstance(f[0], (str, bytes)) and f[0].startswith(flag_filter)]
-
-
-def set_flags(obj, flag_field, flags):
-    """Will process the flags and set attributes in the object accordingly.
-
-    The object "obj" will gain attributes named after the flags provided in
-    "flags" and valued True/False, matching the results of applying each
-    flag value from "flags" to flag_field.
-    """
-
-    for flag in flags:
-        if flag[1] & flag_field:
-            #setattr(obj, flag[0], True)
-            obj.__dict__[flag[0]] = True
-        else:
-            #setattr(obj, flag[0], False)
-            obj.__dict__[flag[0]] = False
-
-
 def power_of_two(val):
     return val != 0 and (val & (val-1)) == 0
 
@@ -997,11 +969,7 @@ class SectionStructure(Structure):
     def __setattr__(self, name, val):
 
         if name == 'Characteristics':
-            section_flags = retrieve_flags(SECTION_CHARACTERISTICS, 'IMAGE_SCN_')
-
-            # Set the section's flags according the the Characteristics member
-            set_flags(self, val, section_flags)
-
+            pass
         elif 'IMAGE_SCN_' in name and hasattr(self, name):
             if val:
                 self.__dict__['Characteristics'] |= SECTION_CHARACTERISTICS[name]
@@ -1682,20 +1650,10 @@ class PE(object):
         Loads a PE file, parsing all its structures and making them available
         through the instance's attributes.
         """
-
-        stat = os.stat(fname)
-        if stat.st_size == 0:
-            raise PEFormatError('The file is empty')
         fd = None
         try:
             fd = open(fname, 'rb')
-            self.fileno = fd.fileno()
-            if hasattr(mmap, 'MAP_PRIVATE'):
-                # Unix
-                self.__data__ = mmap.mmap(self.fileno, 0, mmap.MAP_PRIVATE)
-            else:
-                # Windows
-                self.__data__ = mmap.mmap(self.fileno, 0, access=mmap.ACCESS_READ)
+            self.__data__ = fd.read()
             self.__from_file = True
         except IOError as excp:
             exception_msg = '{0}'.format(excp)
@@ -1705,19 +1663,6 @@ class PE(object):
         finally:
             if fd is not None:
                 fd.close()
-
-        for byte, byte_count in Counter(bytearray(self.__data__)).items():
-            # Only report the cases where a byte makes up for more than 50% (if
-            # zero) or 15% (if non-zero) of the file's contents. There are
-            # legitimate PEs where 0x00 bytes are close to 50% of the whole
-            # file's contents.
-            if (byte == 0 and 1.0 * byte_count / len(self.__data__) > 0.5) or (
-                byte != 0 and 1.0 * byte_count / len(self.__data__) > 0.15):
-                self.__warnings.append(
-                    ("Byte 0x{0:02x} makes up {1:.4f}% of the file's contents."
-                    " This may indicate truncation / malformation.").format(
-                        byte, 100.0 * byte_count / len(self.__data__)))
-
 
         dos_header_data = self.__data__[:64]
         if len(dos_header_data) != 64:
@@ -1742,24 +1687,11 @@ class PE(object):
 
         self.NT_HEADERS = self.__unpack_data__(
             self.__IMAGE_NT_HEADERS_format__,
-            self.__data__[nt_headers_offset:nt_headers_offset+8],
+            self.__data__[nt_headers_offset:nt_headers_offset+4],
             file_offset = nt_headers_offset)
 
-        # We better check the signature right here, before the file screws
-        # around with sections:
-        # OC Patch:
-        # Some malware will cause the Signature value to not exist at all
         if not self.NT_HEADERS or not self.NT_HEADERS.Signature:
             raise PEFormatError('NT Headers not found.')
-
-        if (0xFFFF & self.NT_HEADERS.Signature) == IMAGE_NE_SIGNATURE:
-            raise PEFormatError('Invalid NT Headers signature. Probably a NE file')
-        if (0xFFFF & self.NT_HEADERS.Signature) == IMAGE_LE_SIGNATURE:
-            raise PEFormatError('Invalid NT Headers signature. Probably a LE file')
-        if (0xFFFF & self.NT_HEADERS.Signature) == IMAGE_LX_SIGNATURE:
-            raise PEFormatError('Invalid NT Headers signature. Probably a LX file')
-        if (0xFFFF & self.NT_HEADERS.Signature) == IMAGE_TE_SIGNATURE:
-            raise PEFormatError('Invalid NT Headers signature. Probably a TE file')
         if self.NT_HEADERS.Signature != IMAGE_NT_SIGNATURE:
             raise PEFormatError('Invalid NT Headers signature.')
 
@@ -1767,16 +1699,11 @@ class PE(object):
             self.__IMAGE_FILE_HEADER_format__,
             self.__data__[nt_headers_offset+4:nt_headers_offset+4+32],
             file_offset = nt_headers_offset+4)
-        image_flags = retrieve_flags(IMAGE_CHARACTERISTICS, 'IMAGE_FILE_')
 
         if not self.FILE_HEADER:
             raise PEFormatError('File Header missing')
 
-        # Set the image's flags according the the Characteristics member
-        set_flags(self.FILE_HEADER, self.FILE_HEADER.Characteristics, image_flags)
-
-        optional_header_offset =    \
-            nt_headers_offset+4+self.FILE_HEADER.sizeof()
+        optional_header_offset = nt_headers_offset+4+self.FILE_HEADER.sizeof()
 
         # Note: location of sections can be controlled from PE header:
         sections_offset = optional_header_offset + self.FILE_HEADER.SizeOfOptionalHeader
@@ -1868,15 +1795,6 @@ class PE(object):
             self.__warnings.append(
                 "Invalid type 0x{0:04x} in Optional Header.".format(
                     self.OPTIONAL_HEADER.Magic))
-
-        dll_characteristics_flags = retrieve_flags(DLL_CHARACTERISTICS, 'IMAGE_DLLCHARACTERISTICS_')
-
-        # Set the Dll Characteristics flags according the the DllCharacteristics member
-        set_flags(
-            self.OPTIONAL_HEADER,
-            self.OPTIONAL_HEADER.DllCharacteristics,
-            dll_characteristics_flags)
-
 
         self.OPTIONAL_HEADER.DATA_DIRECTORY = []
         #offset = (optional_header_offset + self.FILE_HEADER.SizeOfOptionalHeader)
@@ -2200,12 +2118,6 @@ class PE(object):
             if simultaneous_errors >= MAX_SIMULTANEOUS_ERRORS:
                 self.__warnings.append('Too many warnings parsing section. Aborting.')
                 break
-
-
-            section_flags = retrieve_flags(SECTION_CHARACTERISTICS, 'IMAGE_SCN_')
-
-            # Set the section's flags according the the Characteristics member
-            set_flags(section, section.Characteristics, section_flags)
 
             self.sections.append(section)
 
