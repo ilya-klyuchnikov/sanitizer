@@ -4901,38 +4901,9 @@ class PE(object):
         return struct.unpack('<I', data[offset*4:(offset+1)*4])[0]
 
 
-    def get_dword_at_rva(self, rva):
-        """Return the double word value at the given RVA.
-
-        Returns None if the value can't be read, i.e. the RVA can't be mapped
-        to a file offset.
-        """
-
-        try:
-            return self.get_dword_from_data(self.get_data(rva, 4), 0)
-        except PEFormatError:
-            return None
-
-
-    def get_dword_from_offset(self, offset):
-        """Return the double word value at the given file offset. (little endian)"""
-
-        if offset+4 > len(self.__data__):
-            return None
-
-        return self.get_dword_from_data(self.__data__[offset:offset+4], 0)
-
-
-    def set_dword_at_rva(self, rva, dword):
-        """Set the double word value at the file offset corresponding to the given RVA."""
-        return self.set_bytes_at_rva(rva, self.get_data_from_dword(dword))
-
-
     def set_dword_at_offset(self, offset, dword):
         """Set the double word value at the given file offset."""
         return self.set_bytes_at_offset(offset, self.get_data_from_dword(dword))
-
-
 
     ##
     # Word get / set
@@ -4958,93 +4929,9 @@ class PE(object):
         return struct.unpack('<H', data[offset*2:(offset+1)*2])[0]
 
 
-    def get_word_at_rva(self, rva):
-        """Return the word value at the given RVA.
-
-        Returns None if the value can't be read, i.e. the RVA can't be mapped
-        to a file offset.
-        """
-
-        try:
-            return self.get_word_from_data(self.get_data(rva)[:2], 0)
-        except PEFormatError:
-            return None
-
-
-    def get_word_from_offset(self, offset):
-        """Return the word value at the given file offset. (little endian)"""
-
-        if offset+2 > len(self.__data__):
-            return None
-
-        return self.get_word_from_data(self.__data__[offset:offset+2], 0)
-
-
-    def set_word_at_rva(self, rva, word):
-        """Set the word value at the file offset corresponding to the given RVA."""
-        return self.set_bytes_at_rva(rva, self.get_data_from_word(word))
-
-
     def set_word_at_offset(self, offset, word):
         """Set the word value at the given file offset."""
         return self.set_bytes_at_offset(offset, self.get_data_from_word(word))
-
-
-    ##
-    # Quad-Word get / set
-    ##
-
-    def get_data_from_qword(self, word):
-        """Return a eight byte string representing the quad-word value. (little endian)."""
-        return struct.pack('<Q', word)
-
-
-    def get_qword_from_data(self, data, offset):
-        """Convert eight bytes of data to a word (little endian)
-
-        'offset' is assumed to index into a word array. So setting it to
-        N will return a dword out of the data starting at offset N*8.
-
-        Returns None if the data can't be turned into a quad word.
-        """
-
-        if (offset+1)*8 > len(data):
-            return None
-
-        return struct.unpack('<Q', data[offset*8:(offset+1)*8])[0]
-
-
-    def get_qword_at_rva(self, rva):
-        """Return the quad-word value at the given RVA.
-
-        Returns None if the value can't be read, i.e. the RVA can't be mapped
-        to a file offset.
-        """
-
-        try:
-            return self.get_qword_from_data(self.get_data(rva)[:8], 0)
-        except PEFormatError:
-            return None
-
-
-    def get_qword_from_offset(self, offset):
-        """Return the quad-word value at the given file offset. (little endian)"""
-
-        if offset+8 > len(self.__data__):
-            return None
-
-        return self.get_qword_from_data(self.__data__[offset:offset+8], 0)
-
-
-    def set_qword_at_rva(self, rva, qword):
-        """Set the quad-word value at the file offset corresponding to the given RVA."""
-        return self.set_bytes_at_rva(rva, self.get_data_from_qword(qword))
-
-
-    def set_qword_at_offset(self, offset, qword):
-        """Set the quad-word value at the given file offset."""
-        return self.set_bytes_at_offset(offset, self.get_data_from_qword(qword))
-
 
 
     ##
