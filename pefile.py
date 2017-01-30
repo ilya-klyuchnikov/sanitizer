@@ -1626,16 +1626,13 @@ class PE(object):
     __IMAGE_BOUND_FORWARDER_REF_format__ = ('IMAGE_BOUND_FORWARDER_REF',
         ('I,TimeDateStamp', 'H,OffsetModuleName', 'H,Reserved') )
 
-    def __init__(self, name=None, data=None):
+    def __init__(self, name):
 
         self.sections = []
 
         self.__warnings = []
 
         self.PE_TYPE = None
-
-        if  not name and not data:
-            return
 
         # This list will keep track of all the structures created.
         # That will allow for an easy iteration through the list
@@ -1644,7 +1641,7 @@ class PE(object):
         self.__from_file = None
 
         try:
-            self.__parse__(name, data)
+            self.__parse__(name)
         except:
             self.close()
             raise
@@ -1679,39 +1676,35 @@ class PE(object):
         return structure
 
 
-    def __parse__(self, fname, data):
+    def __parse__(self, fname):
         """Parse a Portable Executable file.
 
         Loads a PE file, parsing all its structures and making them available
         through the instance's attributes.
         """
 
-        if fname:
-            stat = os.stat(fname)
-            if stat.st_size == 0:
-                raise PEFormatError('The file is empty')
-            fd = None
-            try:
-                fd = open(fname, 'rb')
-                self.fileno = fd.fileno()
-                if hasattr(mmap, 'MAP_PRIVATE'):
-                    # Unix
-                    self.__data__ = mmap.mmap(self.fileno, 0, mmap.MAP_PRIVATE)
-                else:
-                    # Windows
-                    self.__data__ = mmap.mmap(self.fileno, 0, access=mmap.ACCESS_READ)
-                self.__from_file = True
-            except IOError as excp:
-                exception_msg = '{0}'.format(excp)
-                if exception_msg:
-                    exception_msg = ': %s' % exception_msg
-                raise Exception('Unable to access file \'{0}\'{1}'.format(fname, exception_msg))
-            finally:
-                if fd is not None:
-                    fd.close()
-        elif data:
-            self.__data__ = data
-            self.__from_file = False
+        stat = os.stat(fname)
+        if stat.st_size == 0:
+            raise PEFormatError('The file is empty')
+        fd = None
+        try:
+            fd = open(fname, 'rb')
+            self.fileno = fd.fileno()
+            if hasattr(mmap, 'MAP_PRIVATE'):
+                # Unix
+                self.__data__ = mmap.mmap(self.fileno, 0, mmap.MAP_PRIVATE)
+            else:
+                # Windows
+                self.__data__ = mmap.mmap(self.fileno, 0, access=mmap.ACCESS_READ)
+            self.__from_file = True
+        except IOError as excp:
+            exception_msg = '{0}'.format(excp)
+            if exception_msg:
+                exception_msg = ': %s' % exception_msg
+            raise Exception('Unable to access file \'{0}\'{1}'.format(fname, exception_msg))
+        finally:
+            if fd is not None:
+                fd.close()
 
         for byte, byte_count in Counter(bytearray(self.__data__)).items():
             # Only report the cases where a byte makes up for more than 50% (if
