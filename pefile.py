@@ -30,17 +30,8 @@ __contact__ = 'ero.carrera@gmail.com'
 
 import struct
 import sys
-import time
-import math
 import string
 import mmap
-import ordlookup
-
-from collections import Counter
-from hashlib import sha1
-from hashlib import sha256
-from hashlib import sha512
-from hashlib import md5
 
 PY3 = sys.version_info > (3,)
 
@@ -410,12 +401,6 @@ class SectionStructure(Structure):
                 self.__dict__['Characteristics'] ^= SECTION_CHARACTERISTICS[name]
 
         self.__dict__[name] = val
-
-
-    def get_rva_from_offset(self, offset):
-        return offset - self.pe.adjust_FileAlignment( self.PointerToRawData,
-            self.pe.OPTIONAL_HEADER.FileAlignment ) + self.pe.adjust_SectionAlignment( self.VirtualAddress,
-            self.pe.OPTIONAL_HEADER.SectionAlignment, self.pe.OPTIONAL_HEADER.FileAlignment )
 
 
     def get_offset_from_rva(self, rva):
@@ -1801,30 +1786,6 @@ class PE(object):
         return s.get_data(rva, length)
 
 
-    def get_rva_from_offset(self, offset):
-        """Get the RVA corresponding to this file offset. """
-
-        s = self.get_section_by_offset(offset)
-        if not s:
-            if self.sections:
-                lowest_rva = min( [ self.adjust_SectionAlignment( s.VirtualAddress,
-                    self.OPTIONAL_HEADER.SectionAlignment, self.OPTIONAL_HEADER.FileAlignment ) for s in self.sections] )
-                if offset < lowest_rva:
-                    # We will assume that the offset lies within the headers, or
-                    # at least points before where the earliest section starts
-                    # and we will simply return the offset as the RVA
-                    #
-                    # The case illustrating this behavior can be found at:
-                    # http://corkami.blogspot.com/2010/01/hey-hey-hey-whats-in-your-head.html
-                    # where the import table is not contained by any section
-                    # hence the RVA needs to be resolved to a raw offset
-                    return offset
-                return None
-            else:
-                return offset
-            #raise PEFormatError("specified offset (0x%x) doesn't belong to any section." % offset)
-        return s.get_rva_from_offset(offset)
-
     def get_offset_from_rva(self, rva):
         """Get the file offset corresponding to this RVA.
 
@@ -1881,55 +1842,6 @@ class PE(object):
             return sections[0]
 
         return None
-
-
-    ##
-    # Double-Word get / set
-    ##
-
-    def get_data_from_dword(self, dword):
-        """Return a four byte string representing the double word value. (little endian)."""
-        return struct.pack('<L', dword & 0xffffffff)
-
-
-    def get_dword_from_data(self, data, offset):
-        """Convert four bytes of data to a double word (little endian)
-
-        'offset' is assumed to index into a dword array. So setting it to
-        N will return a dword out of the data starting at offset N*4.
-
-        Returns None if the data can't be turned into a double word.
-        """
-
-        if (offset+1)*4 > len(data):
-            return None
-
-        return struct.unpack('<I', data[offset*4:(offset+1)*4])[0]
-
-
-    ##
-    # Word get / set
-    ##
-
-    def get_data_from_word(self, word):
-        """Return a two byte string representing the word value. (little endian)."""
-        return struct.pack('<H', word)
-
-
-    def get_word_from_data(self, data, offset):
-        """Convert two bytes of data to a word (little endian)
-
-        'offset' is assumed to index into a word array. So setting it to
-        N will return a dword out of the data starting at offset N*2.
-
-        Returns None if the data can't be turned into a word.
-        """
-
-        if (offset+1)*2 > len(data):
-            return None
-
-        return struct.unpack('<H', data[offset*2:(offset+1)*2])[0]
-
 
     # According to http://corkami.blogspot.com/2010/01/parce-que-la-planche-aura-brule.html
     # if PointerToRawData is less that 0x200 it's rounded to zero. Loading the test file
