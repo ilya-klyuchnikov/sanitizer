@@ -5335,58 +5335,6 @@ class PE(object):
 
         return False
 
-
-    def get_overlay_data_start_offset(self):
-        """Get the offset of data appended to the file and not contained within
-        the area described in the headers."""
-
-        largest_offset_and_size = (0, 0)
-
-        def update_if_sum_is_larger_and_within_file(offset_and_size, file_size=len(self.__data__)):
-            if sum(offset_and_size) <= file_size and sum(offset_and_size) > sum(largest_offset_and_size):
-                return offset_and_size
-            return largest_offset_and_size
-
-        if hasattr(self, 'OPTIONAL_HEADER'):
-            largest_offset_and_size = update_if_sum_is_larger_and_within_file(
-                (self.OPTIONAL_HEADER.get_file_offset(), self.FILE_HEADER.SizeOfOptionalHeader))
-
-        for section in self.sections:
-            largest_offset_and_size = update_if_sum_is_larger_and_within_file(
-                (section.PointerToRawData, section.SizeOfRawData))
-
-        for directory in self.OPTIONAL_HEADER.DATA_DIRECTORY:
-            largest_offset_and_size = update_if_sum_is_larger_and_within_file(
-                (directory.VirtualAddress, directory.Size))
-
-        if len(self.__data__) > sum(largest_offset_and_size):
-            return sum(largest_offset_and_size)
-
-        return None
-
-
-    def get_overlay(self):
-        """Get the data appended to the file and not contained within the area described in the headers."""
-
-        overlay_data_offset = self.get_overlay_data_start_offset()
-
-        if overlay_data_offset is not None:
-            return self.__data__[ overlay_data_offset : ]
-
-        return None
-
-
-    def trim(self):
-        """Return the just data defined by the PE headers, removing any overlayed data."""
-
-        overlay_data_offset = self.get_overlay_data_start_offset()
-
-        if overlay_data_offset is not None:
-            return self.__data__[ : overlay_data_offset ]
-
-        return self.__data__[:]
-
-
     # According to http://corkami.blogspot.com/2010/01/parce-que-la-planche-aura-brule.html
     # if PointerToRawData is less that 0x200 it's rounded to zero. Loading the test file
     # in a debugger it's easy to verify that the PointerToRawData value of 1 is rounded
