@@ -476,77 +476,6 @@ class DebugData(DataContainer):
 
 
 class PE(object):
-    """A Portable Executable representation.
-
-    This class provides access to most of the information in a PE file.
-
-    It expects to be supplied the name of the file to load or PE data
-    to process and an optional argument 'fast_load' (False by default)
-    which controls whether to load all the directories information,
-    which can be quite time consuming.
-
-    pe = pefile.PE('module.dll')
-    pe = pefile.PE(name='module.dll')
-
-    would load 'module.dll' and process it. If the data would be already
-    available in a buffer the same could be achieved with:
-
-    pe = pefile.PE(data=module_dll_data)
-
-    The "fast_load" can be set to a default by setting its value in the
-    module itself by means, for instance, of a "pefile.fast_load = True".
-    That will make all the subsequent instances not to load the
-    whole PE structure. The "full_load" method can be used to parse
-    the missing data at a later stage.
-
-    Basic headers information will be available in the attributes:
-
-    DOS_HEADER
-    NT_HEADERS
-    FILE_HEADER
-    OPTIONAL_HEADER
-
-    All of them will contain among their attributes the members of the
-    corresponding structures as defined in WINNT.H
-
-    The raw data corresponding to the header (from the beginning of the
-    file up to the start of the first section) will be available in the
-    instance's attribute 'header' as a string.
-
-    The sections will be available as a list in the 'sections' attribute.
-    Each entry will contain as attributes all the structure's members.
-
-    Directory entries will be available as attributes (if they exist):
-    (no other entries are processed at this point)
-
-    DIRECTORY_ENTRY_IMPORT (list of ImportDescData instances)
-    DIRECTORY_ENTRY_EXPORT (ExportDirData instance)
-    DIRECTORY_ENTRY_RESOURCE (ResourceDirData instance)
-    DIRECTORY_ENTRY_DEBUG (list of DebugData instances)
-    DIRECTORY_ENTRY_BASERELOC (list of BaseRelocationData instances)
-    DIRECTORY_ENTRY_TLS
-    DIRECTORY_ENTRY_BOUND_IMPORT (list of BoundImportData instances)
-
-    The following dictionary attributes provide ways of mapping different
-    constants. They will accept the numeric value and return the string
-    representation and the opposite, feed in the string and get the
-    numeric constant:
-
-    DIRECTORY_ENTRY
-    IMAGE_CHARACTERISTICS
-    SECTION_CHARACTERISTICS
-    DEBUG_TYPE
-    SUBSYSTEM_TYPE
-    MACHINE_TYPE
-    RELOCATION_TYPE
-    RESOURCE_TYPE
-    LANG
-    SUBLANG
-    """
-
-    #
-    # Format specifications for PE structures.
-    #
 
     __IMAGE_DOS_HEADER_format__ = ('IMAGE_DOS_HEADER',
         ('H,e_magic', 'H,e_cblp', 'H,e_cp',
@@ -626,38 +555,6 @@ class PE(object):
         'I,TimeDateStamp', 'H,MajorVersion', 'H,MinorVersion',
         'H,NumberOfNamedEntries', 'H,NumberOfIdEntries'))
 
-    __IMAGE_RESOURCE_DIRECTORY_ENTRY_format__ = ('IMAGE_RESOURCE_DIRECTORY_ENTRY',
-        ('I,Name',
-        'I,OffsetToData'))
-
-    __IMAGE_RESOURCE_DATA_ENTRY_format__ = ('IMAGE_RESOURCE_DATA_ENTRY',
-        ('I,OffsetToData', 'I,Size', 'I,CodePage', 'I,Reserved'))
-
-    __VS_VERSIONINFO_format__ = ( 'VS_VERSIONINFO',
-        ('H,Length', 'H,ValueLength', 'H,Type' ))
-
-    __VS_FIXEDFILEINFO_format__ = ( 'VS_FIXEDFILEINFO',
-        ('I,Signature', 'I,StrucVersion', 'I,FileVersionMS', 'I,FileVersionLS',
-         'I,ProductVersionMS', 'I,ProductVersionLS', 'I,FileFlagsMask', 'I,FileFlags',
-         'I,FileOS', 'I,FileType', 'I,FileSubtype', 'I,FileDateMS', 'I,FileDateLS'))
-
-    __StringFileInfo_format__ = ( 'StringFileInfo',
-        ('H,Length', 'H,ValueLength', 'H,Type' ))
-
-    __StringTable_format__ = ( 'StringTable',
-        ('H,Length', 'H,ValueLength', 'H,Type' ))
-
-    __String_format__ = ( 'String',
-        ('H,Length', 'H,ValueLength', 'H,Type' ))
-
-    __Var_format__ = ( 'Var', ('H,Length', 'H,ValueLength', 'H,Type' ))
-
-    __IMAGE_THUNK_DATA_format__ = ('IMAGE_THUNK_DATA',
-        ('I,ForwarderString,Function,Ordinal,AddressOfData',))
-
-    __IMAGE_THUNK_DATA64_format__ = ('IMAGE_THUNK_DATA',
-        ('Q,ForwarderString,Function,Ordinal,AddressOfData',))
-
     __IMAGE_DEBUG_DIRECTORY_format__ = ('IMAGE_DEBUG_DIRECTORY',
         ('I,Characteristics', 'I,TimeDateStamp', 'H,MajorVersion',
         'H,MinorVersion', 'I,Type', 'I,SizeOfData', 'I,AddressOfRawData',
@@ -665,9 +562,6 @@ class PE(object):
 
     __IMAGE_BASE_RELOCATION_format__ = ('IMAGE_BASE_RELOCATION',
         ('I,VirtualAddress', 'I,SizeOfBlock') )
-
-    __IMAGE_BASE_RELOCATION_ENTRY_format__ = ('IMAGE_BASE_RELOCATION_ENTRY',
-        ('H,Data',) )
 
     __IMAGE_TLS_DIRECTORY_format__ = ('IMAGE_TLS_DIRECTORY',
         ('I,StartAddressOfRawData', 'I,EndAddressOfRawData',
