@@ -2184,7 +2184,7 @@ class PE(object):
         for structure in self.__structures__:
             structure.default_timestamp()
 
-    def write(self, filename=None):
+    def write(self, filename):
         """Write the PE file.
 
         This function will process all headers and components
@@ -2202,37 +2202,10 @@ class PE(object):
             offset = structure.get_file_offset()
             file_data[offset:offset+len(struct_data)] = struct_data
 
-        if hasattr(self, 'VS_VERSIONINFO'):
-            if hasattr(self, 'FileInfo'):
-                for entry in self.FileInfo:
-                    if hasattr(entry, 'StringTable'):
-                        for st_entry in entry.StringTable:
-                            for key, entry in list(st_entry.entries.items()):
-
-                                # Offsets and lengths of the keys and values.
-                                # Each value in the dictionary is a tuple:
-                                #  (key length, value length)
-                                # The lengths are in characters, not in bytes.
-                                offsets = st_entry.entries_offsets[key]
-                                lengths = st_entry.entries_lengths[key]
-
-                                if len( entry ) > lengths[1]:
-                                    l = entry.decode('utf-8').encode('utf-16le')
-                                    file_data[offsets[1]:offsets[1]+lengths[1]*2 ] = l[:lengths[1]*2]
-                                else:
-                                    encoded_data = entry.decode('utf-8').encode('utf-16le')
-                                    file_data[offsets[1]:offsets[1]+len(encoded_data)] = encoded_data
-
-        new_file_data = file_data
-        if not filename:
-            return new_file_data
-
         f = open(filename, 'wb+')
-        f.write(new_file_data)
+        f.write(file_data)
         f.close()
         return
-
-
 
 
     def parse_sections(self, offset):
@@ -2313,20 +2286,6 @@ class PE(object):
             # Set the section's flags according the the Characteristics member
             set_flags(section, section.Characteristics, section_flags)
 
-            if ( section.__dict__.get('IMAGE_SCN_MEM_WRITE', False)  and
-                section.__dict__.get('IMAGE_SCN_MEM_EXECUTE', False) ):
-
-                if section.Name == 'PAGE' and self.is_driver():
-                    # Drivers can have a PAGE section with those flags set without
-                    # implying that it is malicious
-                    pass
-                else:
-                    self.__warnings.append(
-                        ('Suspicious flags set for section %d. ' % i) +
-                        'Both IMAGE_SCN_MEM_WRITE and IMAGE_SCN_MEM_EXECUTE are set. '
-                        'This might indicate a packed executable.')
-
-
             self.sections.append(section)
 
         # Sort the sections by their VirtualAddress and add a field to each of them
@@ -2346,7 +2305,7 @@ class PE(object):
 
 
 
-    def parse_data_directories(self, directories=None):
+    def parse_data_directories(self):
         """Parse and process the PE file's data directories.
 
         If the optional argument 'directories' is given, only
@@ -2386,10 +2345,6 @@ class PE(object):
             ('IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT', self.parse_delay_import_directory),
             ('IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT', self.parse_directory_bound_imports) )
 
-        if directories is not None:
-            if not isinstance(directories, (tuple, list)):
-                directories = [directories]
-
         for entry in directory_parsing:
             # OC Patch:
             #
@@ -2399,18 +2354,10 @@ class PE(object):
             except IndexError:
                 break
 
-            # Only process all the directories if no individual ones have
-            # been chosen
-            #
-            if directories is None or directory_index in directories:
-
-                if dir_entry.VirtualAddress:
-                    value = entry[1](dir_entry.VirtualAddress, dir_entry.Size)
-                    if value:
-                        setattr(self, entry[0][6:], value)
-
-            if (directories is not None) and isinstance(directories, list) and (entry[0] in directories):
-                directories.remove(directory_index)
+            if dir_entry.VirtualAddress:
+                value = entry[1](dir_entry.VirtualAddress, dir_entry.Size)
+                if value:
+                    setattr(self, entry[0][6:], value)
 
 
 
@@ -4307,89 +4254,8 @@ class PE(object):
         offset is outside the file's boundaries.
         """
 
-        if not isinstance(data, bytes):
-            raise TypeError('data should be of type: bytes')
+        raise Exception()
 
-        if offset >= 0 and offset < len(self.__data__):
-            self.__data__ = ( self.__data__[:offset] + data + self.__data__[offset+len(data):] )
-        else:
-            return False
-
-        return True
-
-
-    def is_exe(self):
-        """Check whether the file is a standard executable.
-
-        This will return true only if the file has the IMAGE_FILE_EXECUTABLE_IMAGE flag set
-        and the IMAGE_FILE_DLL not set and the file does not appear to be a driver either.
-        """
-
-        EXE_flag = IMAGE_CHARACTERISTICS['IMAGE_FILE_EXECUTABLE_IMAGE']
-
-        if (not self.is_dll()) and (not self.is_driver()) and (
-                EXE_flag & self.FILE_HEADER.Characteristics) == EXE_flag:
-            return True
-
-        return False
-
-
-    def is_dll(self):
-        """Check whether the file is a standard DLL.
-
-        This will return true only if the image has the IMAGE_FILE_DLL flag set.
-        """
-
-        DLL_flag = IMAGE_CHARACTERISTICS['IMAGE_FILE_DLL']
-
-        if ( DLL_flag & self.FILE_HEADER.Characteristics) == DLL_flag:
-            return True
-
-        return False
-
-
-    def is_driver(self):
-        """Check whether the file is a Windows driver.
-
-        This will return true only if there are reliable indicators of the image
-        being a driver.
-        """
-
-        # Checking that the ImageBase field of the OptionalHeader is above or
-        # equal to 0x80000000 (that is, whether it lies in the upper 2GB of
-        # the address space, normally belonging to the kernel) is not a
-        # reliable enough indicator.  For instance, PEs that play the invalid
-        # ImageBase trick to get relocated could be incorrectly assumed to be
-        # drivers.
-
-        # This is not reliable either...
-        #
-        # if any((section.Characteristics &
-        #           SECTION_CHARACTERISTICS['IMAGE_SCN_MEM_NOT_PAGED']) for
-        #        section in self.sections ):
-        #    return True
-
-        # If the import directory was not parsed (fast_load = True); do it now.
-        if not hasattr(self, 'DIRECTORY_ENTRY_IMPORT'):
-            self.parse_data_directories(directories=[
-                DIRECTORY_ENTRY['IMAGE_DIRECTORY_ENTRY_IMPORT']])
-
-        # If there's still no import directory (the PE doesn't have one or it's
-        # malformed), give up.
-        if not hasattr(self, 'DIRECTORY_ENTRY_IMPORT'):
-            return False
-
-        # self.DIRECTORY_ENTRY_IMPORT will now exist, although it may be empty.
-        # If it imports from "ntoskrnl.exe" or other kernel components it should
-        # be a driver
-        #
-        system_DLLs = set(
-            ('ntoskrnl.exe', 'hal.dll', 'ndis.sys', 'bootvid.dll', 'kdcom.dll'))
-        if system_DLLs.intersection(
-                [imp.dll.lower() for imp in self.DIRECTORY_ENTRY_IMPORT]):
-            return True
-
-        return False
 
     # According to http://corkami.blogspot.com/2010/01/parce-que-la-planche-aura-brule.html
     # if PointerToRawData is less that 0x200 it's rounded to zero. Loading the test file
