@@ -1,7 +1,6 @@
 import obj
 import subprocess
 import shutil
-import sys
 import json
 import os
 import pipes
@@ -28,7 +27,8 @@ LINK_EXE = "C:\\Program Files (x86)\\Microsoft Visual Studio 14.0\\VC\\bin\\amd6
 
 
 TESTS = [
-    "testdata/01"
+    "testdata/01",
+    "testdata/02",
 ]
 
 
@@ -91,17 +91,17 @@ def exec_test(t):
     input_file = "{0}/{1}".format(t, "test.json")
     with open(input_file) as input:
         config = json.load(input)
-        print config
 
     test_dir = "{0}/{1}".format("tmp", config['test_dir'])
-    print test_dir
 
     shutil.copytree(input_dir, test_dir)
     steps = config['steps']
+    print("==============={0}===============").format(test_dir)
     for step in steps:
         execute_step(test_dir, step)
 
 
+# legend: x - obj.strip, 0 - default timestamp
 if os.path.isdir("tmp"):
     shutil.rmtree("tmp")
 os.makedirs("tmp")

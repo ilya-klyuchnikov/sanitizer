@@ -1,0 +1,46 @@
+{
+  "test_dir" : "02",
+  "steps": [
+    {
+      "compile" : {
+        "flags": ["/c", "/nologo", "main.cpp", "/Fomain.obj"]
+      }
+    },
+    {
+      "fix_obj" : {
+        "input": "main.obj",
+        "output": "main.x.obj"
+      }
+    },
+    {
+      "link" : {
+        "flags": ["/nologo", "main.obj", "/out:main.exe"]
+      }
+    },
+    {
+      "link" : {
+        "flags": ["/nologo", "main.x.obj", "/out:main.x.exe"]
+      }
+    },
+    {
+      "fix_pe" : {
+        "input": "main.x.exe",
+        "output": "main.x.0.exe"
+      }
+    },
+    {
+      "fix_pe" : {
+        "input": "main.exe",
+        "output": "main.0.exe"
+      }
+    },
+    {
+      "compare": {
+        "file1" : "main.0.exe",
+        "file2" : "main.x.0.exe"
+      }
+    }
+  ]
+}
+
+
