@@ -5262,58 +5262,6 @@ class PE(object):
                         self.get_qword_at_rva(entry.rva) + relocation_difference)
 
 
-    def verify_checksum(self):
-
-        return self.OPTIONAL_HEADER.CheckSum == self.generate_checksum()
-
-
-    def generate_checksum(self):
-        # This will make sure that the data representing the PE image
-        # is updated with any changes that might have been made by
-        # assigning values to header fields as those are not automatically
-        # updated upon assignment.
-        #
-        # data = self.write()
-        # print('{0}'.format(len(data)))
-        # for idx, b in enumerate(data):
-        #     if b != ord(self.__data__[idx]) or (idx > 1244440 and idx < 1244460):
-        #         print('Idx: {0} G {1:02x} {3} B {2:02x}'.format(
-        #             idx, ord(self.__data__[idx]), b,
-        #             self.__data__[idx], chr(b)))
-        self.__data__ = self.write()
-
-        # Get the offset to the CheckSum field in the OptionalHeader
-        # (The offset is the same in PE32 and PE32+)
-        checksum_offset = self.OPTIONAL_HEADER.get_file_offset() + 0x40 # 64
-
-        checksum = 0
-        # Verify the data is dword-aligned. Add padding if needed
-        #
-        remainder = len(self.__data__) % 4
-        data_len = len(self.__data__) + ((4-remainder) * ( remainder != 0 ))
-
-        for i in range( int(data_len / 4) ):
-            # Skip the checksum field
-            if i == int(checksum_offset / 4):
-                continue
-            if i+1 == (int(data_len / 4)) and remainder:
-                dword = struct.unpack('I', self.__data__[i*4:]+ ('\0' * (4-remainder)) )[0]
-            else:
-                dword = struct.unpack('I', self.__data__[ i*4 : i*4+4 ])[0]
-            # Optimized the calculation (thanks to Emmanuel Bourg for pointing it out!)
-            checksum += dword
-            if checksum >= 2**32:
-                checksum = (checksum & 0xffffffff) + (checksum >> 32)
-
-        checksum = (checksum & 0xffff) + (checksum >> 16)
-        checksum = (checksum) + (checksum >> 16)
-        checksum = checksum & 0xffff
-
-        # The length is the one of the original data, not the padded one
-        #
-        return checksum + len(self.__data__)
-
-
     def is_exe(self):
         """Check whether the file is a standard executable.
 
