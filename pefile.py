@@ -1351,15 +1351,13 @@ class PE(object):
             ('IMAGE_DIRECTORY_ENTRY_IMPORT', self.parse_import_directory),
             ('IMAGE_DIRECTORY_ENTRY_EXPORT', self.parse_export_directory),
             ('IMAGE_DIRECTORY_ENTRY_DEBUG', self.parse_debug_directory),
-            #('IMAGE_DIRECTORY_ENTRY_BASERELOC', self.parse_relocations_directory),
-            #('IMAGE_DIRECTORY_ENTRY_TLS', self.parse_directory_tls),
+            ('IMAGE_DIRECTORY_ENTRY_BASERELOC', self.parse_relocations_directory),
+            ('IMAGE_DIRECTORY_ENTRY_TLS', self.parse_directory_tls),
             ('IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG', self.parse_directory_load_config),
             ('IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT', self.parse_delay_import_directory),
             ('IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT', self.parse_directory_bound_imports) )
 
         for entry in directory_parsing:
-            # OC Patch:
-            #
             try:
                 directory_index = DIRECTORY_ENTRY[entry[0]]
                 dir_entry = self.OPTIONAL_HEADER.DATA_DIRECTORY[directory_index]
@@ -1423,7 +1421,6 @@ class PE(object):
                 return
 
 
-            forwarder_refs = []
             # 8 is the size of __IMAGE_BOUND_IMPORT_DESCRIPTOR_format__
             for idx in range(min(bnd_descr.NumberOfModuleForwarderRefs,
                                  int(safety_boundary / 8))):
@@ -1455,10 +1452,6 @@ class PE(object):
                     if len(name_str) > 256 or invalid_chars:
                         break
 
-                forwarder_refs.append(BoundImportRefData(
-                    struct = bnd_frwd_ref,
-                    name = name_str))
-
             offset = start+bnd_descr.OffsetModuleName
             name_str = self.get_string_from_data(
                 0, self.__data__[offset : offset + MAX_STRING_LENGTH])
@@ -1472,11 +1465,6 @@ class PE(object):
 
             if not name_str:
                 break
-            bound_imports.append(
-                BoundImportDescData(
-                    struct = bnd_descr,
-                    name = name_str,
-                    entries = forwarder_refs))
 
         return bound_imports
 
@@ -1564,79 +1552,17 @@ class PE(object):
 
             # rlc.VirtualAddress must lie within the Image
             if rlc.VirtualAddress > self.OPTIONAL_HEADER.SizeOfImage:
-                self.__warnings.append(
-                    'Invalid relocation information. VirtualAddress outside'
-                    ' of Image: 0x%x' % rlc.VirtualAddress)
                 break
 
             # rlc.SizeOfBlock must be less or equal than the size of the image
             # (It's a rather loose sanity test)
             if rlc.SizeOfBlock > self.OPTIONAL_HEADER.SizeOfImage:
-                self.__warnings.append(
-                    'Invalid relocation information. SizeOfBlock too large'
-                    ': %d' % rlc.SizeOfBlock)
                 break
 
-            reloc_entries = self.parse_relocations(
-                rva+rlc_size, rlc.VirtualAddress, rlc.SizeOfBlock-rlc_size )
-
-            relocations.append(
-                BaseRelocationData(
-                    struct = rlc,
-                    entries = reloc_entries))
-
-            if not rlc.SizeOfBlock:
+            if rlc.SizeOfBlock == 0:
                 break
+
             rva += rlc.SizeOfBlock
-
-        return relocations
-
-
-    def parse_relocations(self, data_rva, rva, size):
-        """"""
-
-        try:
-            data = self.get_data(data_rva, size)
-            file_offset = self.get_offset_from_rva(data_rva)
-        except PEFormatError as excp:
-            self.__warnings.append(
-                'Bad RVA in relocation data: 0x%x' % (data_rva))
-            return []
-
-        entries = []
-        offsets_and_type = []
-        for idx in range( int(len(data) / 2) ):
-
-            entry = self.__unpack_data__(
-                self.__IMAGE_BASE_RELOCATION_ENTRY_format__,
-                data[idx*2:(idx+1)*2],
-                file_offset = file_offset )
-
-            if not entry:
-                break
-            word = entry.Data
-
-            reloc_type = (word>>12)
-            reloc_offset = (word & 0x0fff)
-            if (reloc_offset, reloc_type) in offsets_and_type:
-                self.__warnings.append(
-                    'Overlapping offsets in relocation data '
-                    'data at RVA: 0x%x' % (reloc_offset+rva))
-                break
-            if len(offsets_and_type) >= 1000:
-                offsets_and_type.pop()
-            offsets_and_type.insert(0, (reloc_offset, reloc_type))
-
-            entries.append(
-                RelocationData(
-                    struct = entry,
-                    type = reloc_type,
-                    base_rva = rva,
-                    rva = reloc_offset+rva))
-            file_offset += entry.sizeof()
-
-        return entries
-
 
     def parse_debug_directory(self, rva, size):
         """"""
@@ -1686,6 +1612,7 @@ class PE(object):
                          'H,Signature_Data5',
                          'I,Signature_Data6',
                          'I,Age']]
+                    # TODO - Hey
                     pdbFileName_size = (
                         dbg_type_size -
                         Structure(__CV_INFO_PDB70_format__).sizeof())
@@ -1771,54 +1698,6 @@ class PE(object):
         return debug
 
 
-    def parse_resource_data_entry(self, rva):
-        """Parse a data entry from the resources directory."""
-
-        try:
-            # If the RVA is invalid all would blow up. Some EXEs seem to be
-            # specially nasty and have an invalid RVA.
-            data = self.get_data(rva, Structure(self.__IMAGE_RESOURCE_DATA_ENTRY_format__).sizeof() )
-        except PEFormatError as excp:
-            self.__warnings.append(
-                'Error parsing a resource directory data entry, '
-                'the RVA is invalid: 0x%x' % ( rva ) )
-            return None
-
-        data_entry = self.__unpack_data__(
-            self.__IMAGE_RESOURCE_DATA_ENTRY_format__, data,
-            file_offset = self.get_offset_from_rva(rva) )
-
-        return data_entry
-
-
-    def parse_resource_entry(self, rva):
-        """Parse a directory entry from the resources directory."""
-
-        try:
-            data = self.get_data( rva, Structure(self.__IMAGE_RESOURCE_DIRECTORY_ENTRY_format__).sizeof() )
-        except PEFormatError as excp:
-            # A warning will be added by the caller if this method returns None
-            return None
-
-        resource = self.__unpack_data__(
-            self.__IMAGE_RESOURCE_DIRECTORY_ENTRY_format__, data,
-            file_offset = self.get_offset_from_rva(rva) )
-
-        if resource is None:
-            return None
-
-        #resource.NameIsString = (resource.Name & 0x80000000L) >> 31
-        resource.NameOffset = resource.Name & 0x7FFFFFFF
-
-        resource.__pad = resource.Name & 0xFFFF0000
-        resource.Id = resource.Name & 0x0000FFFF
-
-        resource.DataIsDirectory = (resource.OffsetToData & 0x80000000) >> 31
-        resource.OffsetToDirectory = resource.OffsetToData & 0x7FFFFFFF
-
-        return resource
-
-
     def parse_export_directory(self, rva, size, forwarded_only=False):
         """Parse the export directory.
 
@@ -1830,167 +1709,13 @@ class PE(object):
         """
 
         try:
-            export_dir =  self.__unpack_data__(
+            self.__unpack_data__(
                 self.__IMAGE_EXPORT_DIRECTORY_format__,
                 self.get_data( rva, Structure(self.__IMAGE_EXPORT_DIRECTORY_format__).sizeof() ),
                 file_offset = self.get_offset_from_rva(rva) )
         except PEFormatError:
             self.__warnings.append(
                 'Error parsing export directory at RVA: 0x%x' % ( rva ) )
-            return
-
-        if not export_dir:
-            return
-
-        # We keep track of the bytes left in the file and use it to set a upper
-        # bound in the number of items that can be read from the different
-        # arrays.
-        def length_until_eof(rva):
-            return len(self.__data__) - self.get_offset_from_rva(rva)
-
-        try:
-            address_of_names = self.get_data(
-                export_dir.AddressOfNames, min( length_until_eof(export_dir.AddressOfNames), export_dir.NumberOfNames*4))
-            address_of_name_ordinals = self.get_data(
-                export_dir.AddressOfNameOrdinals, min( length_until_eof(export_dir.AddressOfNameOrdinals), export_dir.NumberOfNames*4) )
-            address_of_functions = self.get_data(
-                export_dir.AddressOfFunctions, min( length_until_eof(export_dir.AddressOfFunctions), export_dir.NumberOfFunctions*4) )
-        except PEFormatError:
-            self.__warnings.append(
-                'Error parsing export directory at RVA: 0x%x' % ( rva ) )
-            return
-
-        exports = []
-
-        max_failed_entries_before_giving_up = 10
-
-        section = self.get_section_by_rva(export_dir.AddressOfNames)
-        if not section:
-            self.__warnings.append(
-                'RVA AddressOfNames in the export directory points to an invalid address: %x' %
-                export_dir.AddressOfNames)
-            return
-        else:
-            safety_boundary = section.VirtualAddress + len(section.get_data()) - export_dir.AddressOfNames
-
-        for i in range(min(
-                export_dir.NumberOfNames,
-                int(safety_boundary / 4))):
-
-            symbol_ordinal = self.get_word_from_data(
-                address_of_name_ordinals, i)
-
-            if symbol_ordinal is not None and symbol_ordinal*4 < len(address_of_functions):
-                symbol_address = self.get_dword_from_data(
-                    address_of_functions, symbol_ordinal)
-            else:
-                # Corrupt? a bad pointer... we assume it's all
-                # useless, no exports
-                return None
-
-            if symbol_address is None or symbol_address == 0:
-                continue
-
-            # If the function's RVA points within the export directory
-            # it will point to a string with the forwarded symbol's string
-            # instead of pointing the the function start address.
-
-            if symbol_address >= rva and symbol_address < rva+size:
-                forwarder_str = self.get_string_at_rva(symbol_address)
-                try:
-                    forwarder_offset = self.get_offset_from_rva( symbol_address )
-                except PEFormatError:
-                    continue
-            else:
-                if forwarded_only:
-                    continue
-                forwarder_str = None
-                forwarder_offset = None
-
-            symbol_name_address = self.get_dword_from_data(address_of_names, i)
-
-            if symbol_name_address is None:
-                max_failed_entries_before_giving_up -= 1
-                if max_failed_entries_before_giving_up <= 0:
-                    break
-
-            symbol_name = self.get_string_at_rva(symbol_name_address, MAX_SYMBOL_NAME_LENGTH)
-            if not is_valid_function_name(symbol_name):
-                break
-            try:
-                symbol_name_offset = self.get_offset_from_rva( symbol_name_address )
-            except PEFormatError:
-                max_failed_entries_before_giving_up -= 1
-                if max_failed_entries_before_giving_up <= 0:
-                    break
-                continue
-
-            exports.append(
-                ExportData(
-                    pe = self,
-                    ordinal = export_dir.Base+symbol_ordinal,
-                    ordinal_offset = self.get_offset_from_rva( export_dir.AddressOfNameOrdinals + 2*i ),
-                    address = symbol_address,
-                    address_offset = self.get_offset_from_rva( export_dir.AddressOfFunctions + 4*symbol_ordinal ),
-                    name = symbol_name,
-                    name_offset = symbol_name_offset,
-                    forwarder = forwarder_str,
-                    forwarder_offset = forwarder_offset ))
-
-        ordinals = [exp.ordinal for exp in exports]
-
-        max_failed_entries_before_giving_up = 10
-
-        section = self.get_section_by_rva(export_dir.AddressOfFunctions)
-        if not section:
-            self.__warnings.append(
-                'RVA AddressOfFunctions in the export directory points to an invalid address: %x' %
-                export_dir.AddressOfFunctions)
-            return
-        else:
-            safety_boundary = section.VirtualAddress + len(section.get_data()) - export_dir.AddressOfFunctions
-
-        safety_boundary = section.VirtualAddress + len(section.get_data()) - export_dir.AddressOfFunctions
-
-        for idx in range(min(
-                export_dir.NumberOfFunctions,
-                int(safety_boundary / 4))):
-
-            if not idx+export_dir.Base in ordinals:
-                try:
-                    symbol_address = self.get_dword_from_data(
-                        address_of_functions, idx)
-                except PEFormatError:
-                    symbol_address = None
-
-                if symbol_address is None:
-                    max_failed_entries_before_giving_up -= 1
-                    if max_failed_entries_before_giving_up <= 0:
-                        break
-
-                if symbol_address == 0:
-                    continue
-
-                # Checking for forwarder again.
-                if symbol_address >= rva and symbol_address < rva+size:
-                    forwarder_str = self.get_string_at_rva(symbol_address)
-                else:
-                    forwarder_str = None
-
-                exports.append(
-                    ExportData(
-                        ordinal = export_dir.Base+idx,
-                        address = symbol_address,
-                        name = None,
-                        forwarder = forwarder_str))
-
-        return ExportDirData(
-                struct = export_dir,
-                symbols = exports)
-
-
-    def dword_align(self, offset, base):
-        return ((offset+base+3) & 0xfffffffc) - (base & 0xfffffffc)
 
 
     def parse_delay_import_directory(self, rva, size):
@@ -2039,264 +1764,6 @@ class PE(object):
                 break
 
             rva += import_desc.sizeof()
-
-
-    def parse_imports(
-            self, original_first_thunk, first_thunk,
-            forwarder_chain, max_length=None):
-        """Parse the imported symbols.
-
-        It will fill a list, which will be available as the dictionary
-        attribute "imports". Its keys will be the DLL names and the values
-        all the symbols imported from that object.
-        """
-
-        imported_symbols = []
-
-        # The following has been commented as a PE does not
-        # need to have the import data necessarily within
-        # a section, it can keep it in gaps between sections
-        # or overlapping other data.
-        #
-        #imports_section = self.get_section_by_rva(first_thunk)
-        #if not imports_section:
-        #    raise PEFormatError, 'Invalid/corrupt imports.'
-
-        # Import Lookup Table. Contains ordinals or pointers to strings.
-        ilt = self.get_import_table(original_first_thunk, max_length)
-        # Import Address Table. May have identical content to ILT if
-        # PE file is not bounded, Will contain the address of the
-        # imported symbols once the binary is loaded or if it is already
-        # bound.
-        iat = self.get_import_table(first_thunk, max_length)
-
-        # OC Patch:
-        # Would crash if IAT or ILT had None type
-        if (not iat or len(iat)==0) and (not ilt or len(ilt)==0):
-            self.__warnings.append(
-                'Damaged Import Table information. '
-                'ILT and/or IAT appear to be broken. '
-                'OriginalFirstThunk: 0x{0:x} FirstThunk: 0x{1:x}'.format(
-                    original_first_thunk, first_thunk))
-            return []
-
-        table = None
-        if ilt:
-            table = ilt
-        elif iat:
-            table = iat
-        else:
-            return None
-
-        imp_offset = 4
-        address_mask = 0x7fffffff
-        if self.PE_TYPE == OPTIONAL_HEADER_MAGIC_PE:
-            ordinal_flag = IMAGE_ORDINAL_FLAG
-        elif self.PE_TYPE == OPTIONAL_HEADER_MAGIC_PE_PLUS:
-            ordinal_flag = IMAGE_ORDINAL_FLAG64
-            imp_offset = 8
-            address_mask = 0x7fffffffffffffff
-        else:
-            # Some PEs may have an invalid value in the Magic field of the
-            # Optional Header. Just in case the remaining file is parseable
-            # let's pretend it's a 32bit PE32 by default.
-            ordinal_flag = IMAGE_ORDINAL_FLAG
-
-        num_invalid = 0
-        for idx in range(len(table)):
-            imp_ord = None
-            imp_hint = None
-            imp_name = None
-            name_offset = None
-            hint_name_table_rva = None
-
-            if table[idx].AddressOfData:
-                # If imported by ordinal, we will append the ordinal number
-                #
-                if table[idx].AddressOfData & ordinal_flag:
-                    import_by_ordinal = True
-                    imp_ord = table[idx].AddressOfData & 0xffff
-                    imp_name = None
-                    name_offset = None
-                else:
-                    import_by_ordinal = False
-                    try:
-                        hint_name_table_rva = table[idx].AddressOfData & address_mask
-                        data = self.get_data(hint_name_table_rva, 2)
-                        # Get the Hint
-                        imp_hint = self.get_word_from_data(data, 0)
-                        imp_name = self.get_string_at_rva(table[idx].AddressOfData+2, MAX_IMPORT_NAME_LENGTH)
-                        if not is_valid_function_name(imp_name):
-                            imp_name = b('*invalid*')
-
-                        name_offset = self.get_offset_from_rva(table[idx].AddressOfData+2)
-                    except PEFormatError as e:
-                        pass
-
-                # by nriva: we want the ThunkRVA and ThunkOffset
-                thunk_offset = table[idx].get_file_offset()
-                thunk_rva = self.get_rva_from_offset(thunk_offset)
-
-            imp_address = first_thunk + self.OPTIONAL_HEADER.ImageBase + idx * imp_offset
-
-            struct_iat = None
-            try:
-                if iat and ilt and ilt[idx].AddressOfData != iat[idx].AddressOfData:
-                    imp_bound = iat[idx].AddressOfData
-                    struct_iat = iat[idx]
-                else:
-                    imp_bound = None
-            except IndexError:
-                imp_bound = None
-
-            # The file with hashes:
-            #
-            # MD5: bfe97192e8107d52dd7b4010d12b2924
-            # SHA256: 3d22f8b001423cb460811ab4f4789f277b35838d45c62ec0454c877e7c82c7f5
-            #
-            # has an invalid table built in a way that it's parseable but contains invalid
-            # entries that lead pefile to take extremely long amounts of time to
-            # parse. It also leads to extreme memory consumption.
-            # To prevent similar cases, if invalid entries are found in the middle of a
-            # table the parsing will be aborted
-            #
-            if imp_ord == None and imp_name == None:
-                raise PEFormatError('Invalid entries, aborting parsing.')
-
-            # Some PEs appear to interleave valid and invalid imports. Instead of
-            # aborting the parsing altogether we will simply skip the invalid entries.
-            # Although if we see 1000 invalid entries and no legit ones, we abort.
-            if imp_name == b('*invalid*'):
-                if num_invalid > 1000 and num_invalid == idx:
-                    raise PEFormatError('Too many invalid names, aborting parsing.')
-                num_invalid += 1
-                continue
-
-            if imp_name != '' and (imp_ord or imp_name):
-                imported_symbols.append(
-                    ImportData(
-                    pe = self,
-                        struct_table = table[idx],
-                        struct_iat = struct_iat, # for bound imports if any
-                        import_by_ordinal = import_by_ordinal,
-                        ordinal = imp_ord,
-                        ordinal_offset = table[idx].get_file_offset(),
-                        hint = imp_hint,
-                        name = imp_name,
-                        name_offset = name_offset,
-                        bound = imp_bound,
-                        address = imp_address,
-                        hint_name_table_rva = hint_name_table_rva,
-                        thunk_offset = thunk_offset,
-                        thunk_rva = thunk_rva ))
-
-        return imported_symbols
-
-
-
-    def get_import_table(self, rva, max_length=None):
-
-        table = []
-
-        # We need the ordinal flag for a simple heuristic
-        # we're implementing within the loop
-        #
-        if self.PE_TYPE == OPTIONAL_HEADER_MAGIC_PE:
-            ordinal_flag = IMAGE_ORDINAL_FLAG
-            format = self.__IMAGE_THUNK_DATA_format__
-        elif self.PE_TYPE == OPTIONAL_HEADER_MAGIC_PE_PLUS:
-            ordinal_flag = IMAGE_ORDINAL_FLAG64
-            format = self.__IMAGE_THUNK_DATA64_format__
-        else:
-            # Some PEs may have an invalid value in the Magic field of the
-            # Optional Header. Just in case the remaining file is parseable
-            # let's pretend it's a 32bit PE32 by default.
-            ordinal_flag = IMAGE_ORDINAL_FLAG
-            format = self.__IMAGE_THUNK_DATA_format__
-
-
-        MAX_ADDRESS_SPREAD = 128*2**20 # 64 MB
-        MAX_REPEATED_ADDRESSES = 15
-        repeated_address = 0
-        addresses_of_data_set_64 = set()
-        addresses_of_data_set_32 = set()
-        start_rva = rva
-        while True and rva:
-            if max_length is not None and rva >= start_rva+max_length:
-                self.__warnings.append(
-                    'Error parsing the import table. Entries go beyond bounds.')
-                break
-
-            # if we see too many times the same entry we assume it could be
-            # a table containing bogus data (with malicious intent or otherwise)
-            if repeated_address >= MAX_REPEATED_ADDRESSES:
-                return []
-
-            # if the addresses point somewhere but the difference between the highest
-            # and lowest address is larger than MAX_ADDRESS_SPREAD we assume a bogus
-            # table as the addresses should be contained within a module
-            if (addresses_of_data_set_32 and
-                max(addresses_of_data_set_32) - min(addresses_of_data_set_32) > MAX_ADDRESS_SPREAD ):
-                return []
-            if (addresses_of_data_set_64 and
-                max(addresses_of_data_set_64) - min(addresses_of_data_set_64) > MAX_ADDRESS_SPREAD ):
-                return []
-
-            failed = False
-            try:
-                data = self.get_data(rva, Structure(format).sizeof())
-            except PEFormatError as e:
-                failed = True
-
-            if failed or len(data) != Structure(format).sizeof():
-                self.__warnings.append(
-                    'Error parsing the import table. '
-                    'Invalid data at RVA: 0x%x' % rva)
-                return None
-
-            thunk_data = self.__unpack_data__(
-                format, data, file_offset=self.get_offset_from_rva(rva) )
-
-            # Check if the AddressOfData lies within the range of RVAs that it's
-            # being scanned, abort if that is the case, as it is very unlikely
-            # to be legitimate data.
-            # Seen in PE with SHA256:
-            # 5945bb6f0ac879ddf61b1c284f3b8d20c06b228e75ae4f571fa87f5b9512902c
-            if thunk_data and thunk_data.AddressOfData >= start_rva and thunk_data.AddressOfData <= rva:
-                self.__warnings.append(
-                    'Error parsing the import table. '
-                    'AddressOfData overlaps with THUNK_DATA for '
-                    'THUNK at RVA 0x%x' % ( rva ) )
-                break
-
-            if thunk_data and thunk_data.AddressOfData:
-                # If the entry looks like could be an ordinal...
-                if thunk_data.AddressOfData & ordinal_flag:
-                    # but its value is beyond 2^16, we will assume it's a
-                    # corrupted and ignore it altogether
-                    if thunk_data.AddressOfData & 0x7fffffff > 0xffff:
-                        return []
-                # and if it looks like it should be an RVA
-                else:
-                    # keep track of the RVAs seen and store them to study their
-                    # properties. When certain non-standard features are detected
-                    # the parsing will be aborted
-                    if (thunk_data.AddressOfData in addresses_of_data_set_32 or
-                        thunk_data.AddressOfData in addresses_of_data_set_64):
-                        repeated_address += 1
-                    if thunk_data.AddressOfData >= 2**32:
-                        addresses_of_data_set_64.add(thunk_data.AddressOfData)
-                    else:
-                        addresses_of_data_set_32.add(thunk_data.AddressOfData)
-
-            if not thunk_data or thunk_data.all_zeroes():
-                break
-
-            rva += thunk_data.sizeof()
-
-            table.append(thunk_data)
-
-        return table
 
 
     def get_data(self, rva=0, length=None):
@@ -2380,17 +1847,6 @@ class PE(object):
         return s.get_offset_from_rva(rva)
 
 
-    def get_string_at_rva(self, rva, max_length=MAX_STRING_LENGTH):
-        """Get an ASCII string located at the given address."""
-
-        if rva is None:
-            return None
-
-        s = self.get_section_by_rva(rva)
-        if not s:
-            return self.get_string_from_data(0, self.__data__[rva:rva+max_length])
-        return self.get_string_from_data(0, s.get_data(rva, length=max_length))
-
     def get_bytes_from_data(self, offset, data):
         """."""
         if offset > len(data):
@@ -2404,50 +1860,6 @@ class PE(object):
         if end >= 0:
             s = s[:end]
         return s #.decode('ascii', 'backslashreplace')
-
-    def get_string_u_at_rva(self, rva, max_length = 2**16, encoding=None):
-        """Get an Unicode string located at the given address."""
-
-        try:
-            # If the RVA is invalid all would blow up. Some EXEs seem to be
-            # specially nasty and have an invalid RVA.
-            data = self.get_data(rva, 2)
-        except PEFormatError as e:
-            return None
-        # max_length is the maximum count of 16bit characters
-        # needs to be doubled to get size in bytes
-        max_length <<= 1
-
-        requested = min(max_length, 256)
-        data = self.get_data(rva, requested)
-        # try to find null-termination
-        null_index = -1
-        while True:
-            null_index = data.find(b'\x00\x00', null_index + 1)
-            if null_index == -1:
-                data_length = len(data)
-                if data_length < requested or data_length == max_length:
-                    null_index = len(data) >> 1
-                    break
-                else:
-                    # Request remaining part of data limited by max_length
-                    data += self.get_data(rva + data_length, max_length - data_length)
-                    null_index = requested - 1
-                    requested = max_length
-
-            elif null_index % 2 == 0:
-                null_index >>= 1
-                break
-
-        # convert selected part of the string to unicode
-        uchrs = struct.unpack('<{:d}H'.format(null_index), data[:null_index * 2])
-        s = u''.join(map(chr, uchrs))
-
-        if encoding:
-            return b(s.encode(encoding, 'backslashreplace'))
-
-        return b(s.encode('utf-8', 'backslashreplace'))
-
 
     def get_section_by_offset(self, offset):
         """Get the section containing the given file offset."""
