@@ -1160,51 +1160,7 @@ class ImportData(DataContainer):
                 the address.
     """
 
-
     def __setattr__(self, name, val):
-
-        # If the instance doesn't yet have an ordinal attribute
-        # it's not fully initialized so can't do any of the
-        # following
-        #
-        if hasattr(self, 'ordinal') and hasattr(self, 'bound') and hasattr(self, 'name'):
-
-            if name == 'ordinal':
-
-                if self.pe.PE_TYPE == OPTIONAL_HEADER_MAGIC_PE:
-                    ordinal_flag = IMAGE_ORDINAL_FLAG
-                elif self.pe.PE_TYPE == OPTIONAL_HEADER_MAGIC_PE_PLUS:
-                    ordinal_flag = IMAGE_ORDINAL_FLAG64
-
-                # Set the ordinal and flag the entry as importing by ordinal
-                self.struct_table.Ordinal = ordinal_flag | (val & 0xffff)
-                self.struct_table.AddressOfData = self.struct_table.Ordinal
-                self.struct_table.Function = self.struct_table.Ordinal
-                self.struct_table.ForwarderString = self.struct_table.Ordinal
-            elif name == 'bound':
-                if self.struct_iat is not None:
-                    self.struct_iat.AddressOfData = val
-                    self.struct_iat.AddressOfData = self.struct_iat.AddressOfData
-                    self.struct_iat.Function = self.struct_iat.AddressOfData
-                    self.struct_iat.ForwarderString = self.struct_iat.AddressOfData
-            elif name == 'address':
-                self.struct_table.AddressOfData = val
-                self.struct_table.Ordinal = self.struct_table.AddressOfData
-                self.struct_table.Function = self.struct_table.AddressOfData
-                self.struct_table.ForwarderString = self.struct_table.AddressOfData
-            elif name == 'name':
-                # Make sure we reset the entry in case the import had been set to import by ordinal
-                if self.name_offset:
-
-                    name_rva = self.pe.get_rva_from_offset( self.name_offset )
-                    self.pe.set_dword_at_offset( self.ordinal_offset, (0<<31) | name_rva )
-
-                    # Complain if the length of the new name is longer than the existing one
-                    if len(val) > len(self.name):
-                        #raise Exception('The export name provided is longer than the existing one.')
-                        pass
-                    self.pe.set_bytes_at_offset( self.name_offset, val )
-
         self.__dict__[name] = val
 
 
@@ -1228,30 +1184,6 @@ class ExportData(DataContainer):
     """
 
     def __setattr__(self, name, val):
-
-        # If the instance doesn't yet have an ordinal attribute
-        # it's not fully initialized so can't do any of the
-        # following
-        #
-        if hasattr(self, 'ordinal') and hasattr(self, 'address') and hasattr(self, 'forwarder') and hasattr(self, 'name'):
-
-            if name == 'ordinal':
-                self.pe.set_word_at_offset( self.ordinal_offset, val )
-            elif name == 'address':
-                self.pe.set_dword_at_offset( self.address_offset, val )
-            elif name == 'name':
-                # Complain if the length of the new name is longer than the existing one
-                if len(val) > len(self.name):
-                    #raise Exception('The export name provided is longer than the existing one.')
-                    pass
-                self.pe.set_bytes_at_offset( self.name_offset, val )
-            elif name == 'forwarder':
-                # Complain if the length of the new name is longer than the existing one
-                if len(val) > len(self.forwarder):
-                    #raise Exception('The forwarder name provided is longer than the existing one.')
-                    pass
-                self.pe.set_bytes_at_offset( self.forwarder_offset, val )
-
         self.__dict__[name] = val
 
 
@@ -4209,10 +4141,6 @@ class PE(object):
         return struct.unpack('<I', data[offset*4:(offset+1)*4])[0]
 
 
-    def set_dword_at_offset(self, offset, dword):
-        """Set the double word value at the given file offset."""
-        return self.set_bytes_at_offset(offset, self.get_data_from_dword(dword))
-
     ##
     # Word get / set
     ##
@@ -4235,26 +4163,6 @@ class PE(object):
             return None
 
         return struct.unpack('<H', data[offset*2:(offset+1)*2])[0]
-
-
-    def set_word_at_offset(self, offset, word):
-        """Set the word value at the given file offset."""
-        return self.set_bytes_at_offset(offset, self.get_data_from_word(word))
-
-
-    ##
-    # Set bytes
-    ##
-
-
-    def set_bytes_at_offset(self, offset, data):
-        """Overwrite the bytes at the given file offset with the given string.
-
-        Return True if successful, False otherwise. It can fail if the
-        offset is outside the file's boundaries.
-        """
-
-        raise Exception()
 
 
     # According to http://corkami.blogspot.com/2010/01/parce-que-la-planche-aura-brule.html
