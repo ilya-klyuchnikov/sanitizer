@@ -89,6 +89,7 @@ def fix_pe(test_dir, input, output):
     output_file = "{0}/{1}".format(test_dir, output)
     print("fix_pe {0} --> {1}".format(input_file, output_file))
     pe = pefile.PE(input_file)
+    print "========{0}".format(pe.FILE_HEADER.TimeDateStamp)
     pe.default_timestamp()
     pe.write(output_file)
     pe.close()

@@ -919,7 +919,9 @@ class Structure(object):
                 val = getattr(self, key)
                 if isinstance(val, (int, long)):
                     if key == 'TimeDateStamp' or key == 'dwTimeStamp':
-                        setattr(self, key, 0)
+                        if getattr(self, key) != 0:
+                            print(">>>>>>>>{0}".format(getattr(self, key)))
+                            setattr(self, key, 0)
 
 
 
