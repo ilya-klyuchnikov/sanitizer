@@ -494,12 +494,12 @@ class PE(object):
     __IMAGE_DATA_DIRECTORY_format__ = ('IMAGE_DATA_DIRECTORY',
         ('I,VirtualAddress', 'I,Size'))
 
-
+    # TODO - check FileAlignment
     __IMAGE_OPTIONAL_HEADER_format__ = ('IMAGE_OPTIONAL_HEADER',
         ('H,Magic', 'B,MajorLinkerVersion',
         'B,MinorLinkerVersion', 'I,SizeOfCode',
         'I,SizeOfInitializedData', 'I,SizeOfUninitializedData',
-        'I,AddressOfEntryPoint', 'I,BaseOfCode', 'I,BaseOfData',
+        'I,AddressOfEntryPoint', 'I,BaseOfCode', 'I,BaseOfData', #see BaseOfData in next
         'I,ImageBase', 'I,SectionAlignment', 'I,FileAlignment',
         'H,MajorOperatingSystemVersion', 'H,MinorOperatingSystemVersion',
         'H,MajorImageVersion', 'H,MinorImageVersion',
@@ -540,11 +540,11 @@ class PE(object):
         ('I,grAttrs', 'I,szName', 'I,phmod', 'I,pIAT', 'I,pINT',
         'I,pBoundIAT', 'I,pUnloadIAT', 'I,dwTimeStamp'))
 
-    __IMAGE_IMPORT_DESCRIPTOR_format__ =  ('IMAGE_IMPORT_DESCRIPTOR',
+    __IMAGE_IMPORT_DESCRIPTOR_format__ = ('IMAGE_IMPORT_DESCRIPTOR',
         ('I,OriginalFirstThunk,Characteristics',
         'I,TimeDateStamp', 'I,ForwarderChain', 'I,Name', 'I,FirstThunk'))
 
-    __IMAGE_EXPORT_DIRECTORY_format__ =  ('IMAGE_EXPORT_DIRECTORY',
+    __IMAGE_EXPORT_DIRECTORY_format__ = ('IMAGE_EXPORT_DIRECTORY',
         ('I,Characteristics',
         'I,TimeDateStamp', 'H,MajorVersion', 'H,MinorVersion', 'I,Name',
         'I,Base', 'I,NumberOfFunctions', 'I,NumberOfNames',
@@ -818,8 +818,8 @@ class PE(object):
         self.NT_HEADERS.FILE_HEADER = self.FILE_HEADER
         self.NT_HEADERS.OPTIONAL_HEADER = self.OPTIONAL_HEADER
 
-        MAX_ASSUMED_VALID_NUMBER_OF_RVA_AND_SIZES = 0x100
-
+        ## TODO - check that they are not overlapping
+        ## TODO - if they are not overlapping - a lot of simplifications
         for i in range(int(0x7fffffff & self.OPTIONAL_HEADER.NumberOfRvaAndSizes)):
             my_descr = Structure(self.__IMAGE_DATA_DIRECTORY_format__)
             my_descr_size = my_descr.sizeof()
@@ -905,9 +905,7 @@ class PE(object):
         """
 
         self.sections = []
-        MAX_SIMULTANEOUS_ERRORS = 3
         for i in range(self.FILE_HEADER.NumberOfSections):
-            simultaneous_errors = 0
             section = SectionStructure( self.__IMAGE_SECTION_HEADER_format__, pe=self )
             if not section:
                 break
@@ -925,41 +923,6 @@ class PE(object):
                 break
             section.__unpack__(section_data)
             self.__structures__.append(section)
-
-            if section.SizeOfRawData+section.PointerToRawData > len(self.__data__):
-                simultaneous_errors += 1
-                self.__warnings.append(
-                    'Error parsing section {0}. SizeOfRawData is larger than file.'.format(i))
-
-            if self.adjust_FileAlignment( section.PointerToRawData,
-                self.OPTIONAL_HEADER.FileAlignment ) > len(self.__data__):
-                simultaneous_errors += 1
-                self.__warnings.append(
-                    'Error parsing section {0}. PointerToRawData points beyond the end of the file.'.format(i))
-
-            if section.Misc_VirtualSize > 0x10000000:
-                simultaneous_errors += 1
-                self.__warnings.append(
-                    'Suspicious value found parsing section {0}. VirtualSize is extremely large > 256MiB.'.format(i))
-
-            if self.adjust_SectionAlignment( section.VirtualAddress,
-                self.OPTIONAL_HEADER.SectionAlignment, self.OPTIONAL_HEADER.FileAlignment ) > 0x10000000:
-                simultaneous_errors += 1
-                self.__warnings.append(
-                    'Suspicious value found parsing section {0}. VirtualAddress is beyond 0x10000000.'.format(i))
-
-            if ( self.OPTIONAL_HEADER.FileAlignment != 0 and
-                ( section.PointerToRawData % self.OPTIONAL_HEADER.FileAlignment) != 0):
-                simultaneous_errors += 1
-                self.__warnings.append(
-                    ('Error parsing section {0}. '
-                    'PointerToRawData should normally be '
-                    'a multiple of FileAlignment, this might imply the file '
-                    'is trying to confuse tools which parse this incorrectly.').format(i))
-
-            if simultaneous_errors >= MAX_SIMULTANEOUS_ERRORS:
-                self.__warnings.append('Too many warnings parsing section. Aborting.')
-                break
 
             self.sections.append(section)
 
@@ -1029,8 +992,6 @@ class PE(object):
 
             if dir_entry.VirtualAddress:
                 entry[1](dir_entry.VirtualAddress, dir_entry.Size)
-
-
 
     def parse_directory_bound_imports(self, rva, size):
         """"""
@@ -1568,8 +1529,11 @@ class PE(object):
     #  size, then FileAlignment must match SectionAlignment."
     #
     # The following is a hard-coded constant if the Windows loader
-    def adjust_FileAlignment( self, val, file_alignment ):
-        return val
+    def adjust_FileAlignment(self, pointer_to_raw_data, file_alignment):
+        # TODO - possibly 0x1000?
+        if file_alignment < FILE_ALIGNEMNT_HARDCODED_VALUE:
+            return pointer_to_raw_data
+        return (int(pointer_to_raw_data / 0x200)) * 0x200
 
 
     # According to the document:
@@ -1578,24 +1542,10 @@ class PE(object):
     #  greater than or equal to FileAlignment. The default is the page size for the
     #  architecture."
     #
-    def adjust_SectionAlignment( self, val, section_alignment, file_alignment ):
-        global SectionAlignment_Warning
-        if file_alignment < FILE_ALIGNEMNT_HARDCODED_VALUE:
-            if file_alignment != section_alignment and SectionAlignment_Warning is False:
-                self.__warnings.append(
-                    'If FileAlignment(%x) < 0x200 it should equal SectionAlignment(%x)' % (
-                        file_alignment, section_alignment)  )
-                SectionAlignment_Warning = True
-
+    def adjust_SectionAlignment(self, virtual_address, section_alignment, file_alignment):
         if section_alignment < 0x1000: # page size
             section_alignment = file_alignment
 
-        # 0x200 is the minimum valid FileAlignment according to the documentation
-        # although ntoskrnl.exe has an alignment of 0x80 in some Windows versions
-        #
-        #elif section_alignment < 0x80:
-        #    section_alignment = 0x80
-
-        if section_alignment and val % section_alignment:
-            return section_alignment * ( int(val / section_alignment) )
-        return val
+        if section_alignment and virtual_address % section_alignment:
+            return section_alignment * (int(virtual_address / section_alignment))
+        return virtual_address
