@@ -123,6 +123,12 @@ def find_sections_to_strip(data, number_of_sections):
             sections.append(section_i)
     return set(sections)
 
+SIZE_OF_RAW_DATA = 16
+PTR_TO_RAW_DATA = 20
+PTR_TO_RELOCATIONS = 24
+PTR_TO_LINE_NUMBERS = 28
+NUMBER_OF_RELOCATIONS = 32
+NUMBER_OF_LINENUMBERS = 34
 
 def process(data, number_of_sections, sections_to_strip):
     sections = []
@@ -130,17 +136,17 @@ def process(data, number_of_sections, sections_to_strip):
     to_copy = []
     for section_i in range(0, number_of_sections):
         this_start = SECTION_HEADERS_START + section_i * SECTION_HEADER_SIZE
-        size_of_raw_data, = struct.unpack_from('<I', data, this_start + 16)
-        ptr_to_raw_data, = struct.unpack_from('<I', data, this_start + 20)
-        ptr_to_relocations, = struct.unpack_from('<I', data, this_start + 24)
+        size_of_raw_data, = struct.unpack_from('<I', data, this_start + SIZE_OF_RAW_DATA)
+        ptr_to_raw_data, = struct.unpack_from('<I', data, this_start + PTR_TO_RAW_DATA)
+        ptr_to_relocations, = struct.unpack_from('<I', data, this_start + PTR_TO_RELOCATIONS)
         # 5.3. COFF Line Numbers (Deprecated)
         # COFF line numbers are no longer produced and, in the future, will not be consumed.
 
-        ptr_to_line_numbers, = struct.unpack_from('<I', data, this_start + 28)
+        ptr_to_line_numbers, = struct.unpack_from('<I', data, this_start + PTR_TO_LINE_NUMBERS)
         assert ptr_to_line_numbers == 0
 
-        number_of_relocations, = struct.unpack_from('<h', data, this_start + 32)
-        number_of_line_numbers, = struct.unpack_from('<h', data, this_start + 34)
+        number_of_relocations, = struct.unpack_from('<h', data, this_start + NUMBER_OF_RELOCATIONS)
+        number_of_line_numbers, = struct.unpack_from('<h', data, this_start + NUMBER_OF_LINENUMBERS)
         assert number_of_line_numbers == 0
 
         size_of_relocations = number_of_relocations * RELOCATION_SIZE
@@ -165,7 +171,7 @@ def write_section_headers(output, data, sections, number_of_sections):
         section = sections[section_i]
         if section:
             this_start = SECTION_HEADERS_START + section_i * SECTION_HEADER_SIZE
-            output.fromstring(data[this_start : this_start + 16])
+            output.fromstring(data[this_start : this_start + SIZE_OF_RAW_DATA])
             ptr_to_raw_data, ptr_to_relocations, raw_size = section
             output.fromstring(struct.pack('<I', raw_size))
             # 20 ptr_to_raw_data
