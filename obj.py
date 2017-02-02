@@ -29,6 +29,25 @@ COFF_FILE_HEADER_SIZE = 20
 # 4. Section Table (Section Headers)
 SECTION_HEADERS_START = 20
 SECTION_HEADER_SIZE = 40
+
+SECTION_HEADER_NAME_OFFSET = 0
+SECTION_HEADER_NAME_FORMAT = '8s'
+SECTION_HEADER_VIRTUAL_SIZE_OFFSET = 8
+SECTION_HEADER_VIRTUAL_SIZE_FORMAT = '<I'
+SECTION_HEADER_VIRTUAL_ADDRESS_OFFSET = 12
+SECTION_HEADER_VIRTUAL_ADDRESS_FORMAT = '<I'
+SECTION_HEADER_SIZE_OF_RAW_DATA_OFFSET = 16
+SECTION_HEADER_SIZE_OF_RAW_DATA_FORMAT = '<I'
+SECTION_HEADER_PTR_TO_RAW_DATA_OFFSET = 20
+SECTION_HEADER_PTR_TO_RAW_DATA_FORMAT = '<I'
+SECTION_HEADER_PTR_TO_RELOCATIONS_OFFSET = 24
+SECTION_HEADER_PTR_TO_RELOCATIONS_FORMAT = '<I'
+SECTION_HEADER_PTR_TO_LINE_NUMBERS_OFFSET = 28
+SECTION_HEADER_PTR_TO_LINE_NUMBERS_FORMAT = '<I'
+SECTION_HEADER_NUMBER_OF_RELOCATIONS_OFFSET = 32
+SECTION_HEADER_NUMBER_OF_RELOCATIONS_FORMAT = '<h'
+SECTION_HEADER_NUMBER_OF_LINENUMBERS_OFFSET = 34
+SECTION_HEADER_NUMBER_OF_LINENUMBERS_FORMAT = '<h'
 SECTION_HEADER_CHARACTERISTICS_OFFSET = 36
 SECTION_HEADER_CHARACTERISTICS_FORMAT = '<I'
 
@@ -106,6 +125,62 @@ class FileHeader(object):
             struct.pack(CHARACTERISTICS_FORMAT, self.characteristics))
 
 
+class SectionHeader(object):
+    def __init__(self, data, section_start):
+        self.name = struct.unpack_from(
+            SECTION_HEADER_NAME_FORMAT,
+            data,
+            section_start + SECTION_HEADER_NAME_OFFSET,
+        )
+        self.virtual_size = struct.unpack_from(
+            SECTION_HEADER_VIRTUAL_SIZE_FORMAT,
+            data,
+            section_start + SECTION_HEADER_VIRTUAL_SIZE_OFFSET,
+        )
+        self.virtual_address = struct.unpack_from(
+            SECTION_HEADER_VIRTUAL_ADDRESS_FORMAT,
+            data,
+            section_start + SECTION_HEADER_VIRTUAL_ADDRESS_OFFSET,
+        )
+        self.size_of_raw_data = struct.unpack_from(
+            SECTION_HEADER_SIZE_OF_RAW_DATA_FORMAT,
+            data,
+            section_start + SECTION_HEADER_SIZE_OF_RAW_DATA_OFFSET,
+        )
+        self.ptr_to_raw_data = struct.unpack_from(
+            SECTION_HEADER_PTR_TO_RAW_DATA_FORMAT,
+            data,
+            section_start + SECTION_HEADER_PTR_TO_RAW_DATA_OFFSET,
+        )
+        self.ptr_to_relocations = struct.unpack_from(
+            SECTION_HEADER_PTR_TO_RELOCATIONS_FORMAT,
+            data,
+            section_start + SECTION_HEADER_PTR_TO_RELOCATIONS_OFFSET,
+        )
+        self.ptr_to_linenumbers = struct.unpack_from(
+            SECTION_HEADER_PTR_TO_LINE_NUMBERS_FORMAT,
+            data,
+            section_start + SECTION_HEADER_PTR_TO_LINE_NUMBERS_OFFSET,
+        )
+        self.numbers_of_relocations = struct.unpack_from(
+            SECTION_HEADER_NUMBER_OF_RELOCATIONS_FORMAT,
+            data,
+            section_start + SECTION_HEADER_NUMBER_OF_RELOCATIONS_OFFSET,
+        )
+        self.numbers_of_linenumbers = struct.unpack_from(
+            SECTION_HEADER_NUMBER_OF_LINENUMBERS_FORMAT,
+            data,
+            section_start + SECTION_HEADER_NUMBER_OF_LINENUMBERS_OFFSET,
+        )
+        self.characteristics = struct.unpack_from(
+            SECTION_HEADER_CHARACTERISTICS_FORMAT,
+            data,
+            section_start + SECTION_HEADER_CHARACTERISTICS_OFFSET
+        )
+
+
+
+
 def should_strip_section(sec_characteristics):
     # IMAGE_SCN_LNK_COMDAT - debug$S may have IMAGE_SCN_LNK_COMDAT for imported functions
     return (sec_characteristics & IMAGE_SCN_MEM_DISCARDABLE != 0) and (sec_characteristics & IMAGE_SCN_LNK_COMDAT == 0)
@@ -123,30 +198,25 @@ def find_sections_to_strip(data, number_of_sections):
             sections.append(section_i)
     return set(sections)
 
-SIZE_OF_RAW_DATA = 16
-PTR_TO_RAW_DATA = 20
-PTR_TO_RELOCATIONS = 24
-PTR_TO_LINE_NUMBERS = 28
-NUMBER_OF_RELOCATIONS = 32
-NUMBER_OF_LINENUMBERS = 34
 
 def process(data, number_of_sections, sections_to_strip):
+    """stripped sections: raw data is removed, relocations are removed"""
     sections = []
     removed_bytes = 0
     to_copy = []
     for section_i in range(0, number_of_sections):
         this_start = SECTION_HEADERS_START + section_i * SECTION_HEADER_SIZE
-        size_of_raw_data, = struct.unpack_from('<I', data, this_start + SIZE_OF_RAW_DATA)
-        ptr_to_raw_data, = struct.unpack_from('<I', data, this_start + PTR_TO_RAW_DATA)
-        ptr_to_relocations, = struct.unpack_from('<I', data, this_start + PTR_TO_RELOCATIONS)
+        size_of_raw_data, = struct.unpack_from(SECTION_HEADER_SIZE_OF_RAW_DATA_FORMAT, data, this_start + SECTION_HEADER_SIZE_OF_RAW_DATA_OFFSET)
+        ptr_to_raw_data, = struct.unpack_from(SECTION_HEADER_PTR_TO_RAW_DATA_FORMAT, data, this_start + SECTION_HEADER_PTR_TO_RAW_DATA_OFFSET)
+        ptr_to_relocations, = struct.unpack_from(SECTION_HEADER_PTR_TO_RELOCATIONS_FORMAT, data, this_start + SECTION_HEADER_PTR_TO_RELOCATIONS_OFFSET)
         # 5.3. COFF Line Numbers (Deprecated)
         # COFF line numbers are no longer produced and, in the future, will not be consumed.
 
-        ptr_to_line_numbers, = struct.unpack_from('<I', data, this_start + PTR_TO_LINE_NUMBERS)
+        ptr_to_line_numbers, = struct.unpack_from(SECTION_HEADER_PTR_TO_LINE_NUMBERS_FORMAT, data, this_start + SECTION_HEADER_PTR_TO_LINE_NUMBERS_OFFSET)
         assert ptr_to_line_numbers == 0
 
-        number_of_relocations, = struct.unpack_from('<h', data, this_start + NUMBER_OF_RELOCATIONS)
-        number_of_line_numbers, = struct.unpack_from('<h', data, this_start + NUMBER_OF_LINENUMBERS)
+        number_of_relocations, = struct.unpack_from(SECTION_HEADER_NUMBER_OF_RELOCATIONS_FORMAT, data, this_start + SECTION_HEADER_NUMBER_OF_RELOCATIONS_OFFSET)
+        number_of_line_numbers, = struct.unpack_from(SECTION_HEADER_NUMBER_OF_LINENUMBERS_FORMAT, data, this_start + SECTION_HEADER_NUMBER_OF_LINENUMBERS_OFFSET)
         assert number_of_line_numbers == 0
 
         size_of_relocations = number_of_relocations * RELOCATION_SIZE
@@ -171,19 +241,20 @@ def write_section_headers(output, data, sections, number_of_sections):
         section = sections[section_i]
         if section:
             this_start = SECTION_HEADERS_START + section_i * SECTION_HEADER_SIZE
-            output.fromstring(data[this_start : this_start + SIZE_OF_RAW_DATA])
+            output.fromstring(data[this_start : this_start + SECTION_HEADER_SIZE_OF_RAW_DATA_OFFSET])
             ptr_to_raw_data, ptr_to_relocations, raw_size = section
-            output.fromstring(struct.pack('<I', raw_size))
+            output.fromstring(struct.pack(SECTION_HEADER_SIZE_OF_RAW_DATA_FORMAT, raw_size))
             # 20 ptr_to_raw_data
-            output.fromstring(struct.pack('<I', ptr_to_raw_data))
+            output.fromstring(struct.pack(SECTION_HEADER_PTR_TO_RAW_DATA_FORMAT, ptr_to_raw_data))
             # 24 ptr_to_relocations
-            output.fromstring(struct.pack('<I', ptr_to_relocations))
+            output.fromstring(struct.pack(SECTION_HEADER_PTR_TO_RELOCATIONS_FORMAT, ptr_to_relocations))
             # 28 - ptr_to_line_numbers
             output.fromstring(data[this_start + 28: this_start + 32])
+            # number of relocations
             if ptr_to_relocations > 0:
                 output.fromstring(data[this_start + 32: this_start + 34])
             else:
-                output.fromstring(struct.pack('<h', 0))
+                output.fromstring(struct.pack(SECTION_HEADER_NUMBER_OF_RELOCATIONS_FORMAT, 0))
             output.fromstring(data[this_start + 34 : this_start + 40])
 
 
