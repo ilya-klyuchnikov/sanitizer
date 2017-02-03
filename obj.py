@@ -251,7 +251,7 @@ def process2(sections):
             if section.number_of_relocations > 0:
                 to_copy.append((section.ptr_to_relocations, section.ptr_to_relocations + size_of_relocations))
             section.ptr_to_raw_data = max(section.ptr_to_raw_data - removed_bytes, 0)
-            section.ptr_to_relocations = max(section.ptr_to_relocations - removed_bytes)
+            section.ptr_to_relocations = max(section.ptr_to_relocations - removed_bytes, 0)
 
     return removed_bytes, to_copy
 
