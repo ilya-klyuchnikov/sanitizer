@@ -226,7 +226,7 @@ def read_section_headers(data, number_of_sections):
     for section_i in range(0, number_of_sections):
         section = SectionHeader(
             data,
-            SECTION_HEADERS_START + (section_i * SECTION_HEADER_SIZE) + SECTION_HEADER_CHARACTERISTICS_OFFSET
+            SECTION_HEADERS_START + (section_i * SECTION_HEADER_SIZE)
         )
         sections.append(section)
         # TODO - make a method from it
