@@ -127,57 +127,78 @@ class FileHeader(object):
 
 class SectionHeader(object):
     def __init__(self, data, section_start):
-        self.name = struct.unpack_from(
+        self.name, = struct.unpack_from(
             SECTION_HEADER_NAME_FORMAT,
             data,
             section_start + SECTION_HEADER_NAME_OFFSET,
         )
-        self.virtual_size = struct.unpack_from(
+        self.virtual_size, = struct.unpack_from(
             SECTION_HEADER_VIRTUAL_SIZE_FORMAT,
             data,
             section_start + SECTION_HEADER_VIRTUAL_SIZE_OFFSET,
         )
-        self.virtual_address = struct.unpack_from(
+        self.virtual_address, = struct.unpack_from(
             SECTION_HEADER_VIRTUAL_ADDRESS_FORMAT,
             data,
             section_start + SECTION_HEADER_VIRTUAL_ADDRESS_OFFSET,
         )
-        self.size_of_raw_data = struct.unpack_from(
+        self.size_of_raw_data, = struct.unpack_from(
             SECTION_HEADER_SIZE_OF_RAW_DATA_FORMAT,
             data,
             section_start + SECTION_HEADER_SIZE_OF_RAW_DATA_OFFSET,
         )
-        self.ptr_to_raw_data = struct.unpack_from(
+        self.ptr_to_raw_data, = struct.unpack_from(
             SECTION_HEADER_PTR_TO_RAW_DATA_FORMAT,
             data,
             section_start + SECTION_HEADER_PTR_TO_RAW_DATA_OFFSET,
         )
-        self.ptr_to_relocations = struct.unpack_from(
+        self.ptr_to_relocations, = struct.unpack_from(
             SECTION_HEADER_PTR_TO_RELOCATIONS_FORMAT,
             data,
             section_start + SECTION_HEADER_PTR_TO_RELOCATIONS_OFFSET,
         )
-        self.ptr_to_linenumbers = struct.unpack_from(
+        self.ptr_to_linenumbers, = struct.unpack_from(
             SECTION_HEADER_PTR_TO_LINE_NUMBERS_FORMAT,
             data,
             section_start + SECTION_HEADER_PTR_TO_LINE_NUMBERS_OFFSET,
         )
-        self.numbers_of_relocations = struct.unpack_from(
+        self.number_of_relocations, = struct.unpack_from(
             SECTION_HEADER_NUMBER_OF_RELOCATIONS_FORMAT,
             data,
             section_start + SECTION_HEADER_NUMBER_OF_RELOCATIONS_OFFSET,
         )
-        self.numbers_of_linenumbers = struct.unpack_from(
+        self.numbers_of_linenumbers, = struct.unpack_from(
             SECTION_HEADER_NUMBER_OF_LINENUMBERS_FORMAT,
             data,
             section_start + SECTION_HEADER_NUMBER_OF_LINENUMBERS_OFFSET,
         )
-        self.characteristics = struct.unpack_from(
+        self.characteristics, = struct.unpack_from(
             SECTION_HEADER_CHARACTERISTICS_FORMAT,
             data,
             section_start + SECTION_HEADER_CHARACTERISTICS_OFFSET
         )
 
+    def write(self, output):
+        output.fromstring(
+            struct.pack(SECTION_HEADER_NAME_FORMAT, self.name))
+        output.fromstring(
+            struct.pack(SECTION_HEADER_VIRTUAL_SIZE_FORMAT, self.virtual_size))
+        output.fromstring(
+            struct.pack(SECTION_HEADER_VIRTUAL_ADDRESS_FORMAT, self.virtual_address))
+        output.fromstring(
+            struct.pack(SECTION_HEADER_SIZE_OF_RAW_DATA_FORMAT, self.size_of_raw_data))
+        output.fromstring(
+            struct.pack(SECTION_HEADER_PTR_TO_RAW_DATA_FORMAT, self.ptr_to_raw_data))
+        output.fromstring(
+            struct.pack(SECTION_HEADER_PTR_TO_RELOCATIONS_FORMAT, self.ptr_to_relocations))
+        output.fromstring(
+            struct.pack(SECTION_HEADER_PTR_TO_LINE_NUMBERS_FORMAT, self.ptr_to_linenumbers))
+        output.fromstring(
+            struct.pack(SECTION_HEADER_NUMBER_OF_RELOCATIONS_FORMAT, self.number_of_relocations))
+        output.fromstring(
+            struct.pack(SECTION_HEADER_NUMBER_OF_LINENUMBERS_FORMAT, self.numbers_of_linenumbers))
+        output.fromstring(
+            struct.pack(SECTION_HEADER_CHARACTERISTICS_FORMAT, self.characteristics))
 
 
 
@@ -197,6 +218,42 @@ def find_sections_to_strip(data, number_of_sections):
         if should_strip_section(sec_characteristics):
             sections.append(section_i)
     return set(sections)
+
+
+def read_section_headers(data, number_of_sections):
+    """read section headers from binaries"""
+    sections = []
+    for section_i in range(0, number_of_sections):
+        section = SectionHeader(
+            data,
+            SECTION_HEADERS_START + (section_i * SECTION_HEADER_SIZE) + SECTION_HEADER_CHARACTERISTICS_OFFSET
+        )
+        sections.append(section)
+        # TODO - make a method from it
+        section.should_strip = should_strip_section(section.characteristics)
+    return sections
+
+
+def process2(sections):
+    removed_bytes = 0
+    to_copy = []
+    for section in sections:
+        assert section.ptr_to_linenumbers == 0
+        size_of_relocations = section.number_of_relocations * RELOCATION_SIZE
+        if should_strip_section(section.characteristics):
+            removed_bytes = removed_bytes + section.size_of_raw_data + size_of_relocations
+            section.ptr_to_raw_data = 0
+            section.ptr_to_relocations = 0
+            section.size_of_raw_data = 0
+        else:
+            if section.ptr_to_raw_data > 0 and section.size_of_raw_data > 0:
+                to_copy.append((section.ptr_to_raw_data, section.ptr_to_raw_data + section.size_of_raw_data))
+            if section.number_of_relocations > 0:
+                to_copy.append((section.ptr_to_relocations, section.ptr_to_relocations + size_of_relocations))
+            section.ptr_to_raw_data = max(section.ptr_to_raw_data - removed_bytes, 0)
+            section.ptr_to_relocations = max(section.ptr_to_relocations - removed_bytes)
+
+    return removed_bytes, to_copy
 
 
 def process(data, number_of_sections, sections_to_strip):
@@ -237,25 +294,8 @@ def process(data, number_of_sections, sections_to_strip):
 
 
 def write_section_headers(output, data, sections, number_of_sections):
-    for section_i in range(0, number_of_sections):
-        section = sections[section_i]
-        if section:
-            this_start = SECTION_HEADERS_START + section_i * SECTION_HEADER_SIZE
-            output.fromstring(data[this_start : this_start + SECTION_HEADER_SIZE_OF_RAW_DATA_OFFSET])
-            ptr_to_raw_data, ptr_to_relocations, raw_size = section
-            output.fromstring(struct.pack(SECTION_HEADER_SIZE_OF_RAW_DATA_FORMAT, raw_size))
-            # 20 ptr_to_raw_data
-            output.fromstring(struct.pack(SECTION_HEADER_PTR_TO_RAW_DATA_FORMAT, ptr_to_raw_data))
-            # 24 ptr_to_relocations
-            output.fromstring(struct.pack(SECTION_HEADER_PTR_TO_RELOCATIONS_FORMAT, ptr_to_relocations))
-            # 28 - ptr_to_line_numbers
-            output.fromstring(data[this_start + 28: this_start + 32])
-            # number of relocations
-            if ptr_to_relocations > 0:
-                output.fromstring(data[this_start + 32: this_start + 34])
-            else:
-                output.fromstring(struct.pack(SECTION_HEADER_NUMBER_OF_RELOCATIONS_FORMAT, 0))
-            output.fromstring(data[this_start + 34 : this_start + 40])
+    for section in sections:
+        section.write(output)
 
 
 def write_symbol_table(output, data, pointer_to_symbol_table, number_of_symbols, sections_to_strip):
@@ -295,8 +335,10 @@ def strip(input_file, out_file):
     # sorted_by_second = sorted(data, key=lambda tup: tup[1])
 
     old_pointer_to_symbol_table = header.pointer_to_symbol_table
+    section_headers = read_section_headers(data, header.number_of_sections)
+    removed_bytes, to_copy = process2(section_headers)
     sections_to_strip = find_sections_to_strip(data, header.number_of_sections)
-    sections, removed_bytes, to_copy = process(data, header.number_of_sections, sections_to_strip)
+    #sections, removed_bytes, to_copy = process(data, header.number_of_sections, sections_to_strip)
     to_copy_string_section = [
         (header.pointer_to_symbol_table + SYMBOL_SIZE * header.number_of_symbols, len(data)),
     ]
@@ -309,7 +351,7 @@ def strip(input_file, out_file):
     write_section_headers(
         output,
         data,
-        sections,
+        section_headers,
         header.number_of_sections)
 
     for start, end in to_copy:
