@@ -203,23 +203,9 @@ class SectionHeader(object):
         output.fromstring(
             struct.pack(SECTION_HEADER_CHARACTERISTICS_FORMAT, self.characteristics))
 
-
-def should_strip_section(sec_characteristics):
-    # IMAGE_SCN_LNK_COMDAT - debug$S may have IMAGE_SCN_LNK_COMDAT for imported functions
-    return (sec_characteristics & IMAGE_SCN_MEM_DISCARDABLE != 0) and (sec_characteristics & IMAGE_SCN_LNK_COMDAT == 0)
-
-
-def find_sections_to_strip(data, number_of_sections):
-    sections = []
-    for section_i in range(0, number_of_sections):
-        sec_characteristics, = struct.unpack_from(
-            SECTION_HEADER_CHARACTERISTICS_FORMAT,
-            data,
-            SECTION_HEADERS_START + (section_i * SECTION_HEADER_SIZE) + SECTION_HEADER_CHARACTERISTICS_OFFSET
-        )
-        if should_strip_section(sec_characteristics):
-            sections.append(section_i)
-    return set(sections)
+    def should_strip_section(self):
+        # IMAGE_SCN_LNK_COMDAT - debug$S may have IMAGE_SCN_LNK_COMDAT for imported functions
+        return (self.characteristics & IMAGE_SCN_MEM_DISCARDABLE != 0) and (self.characteristics & IMAGE_SCN_LNK_COMDAT == 0)
 
 
 def read_section_headers(data, number_of_sections):
@@ -231,8 +217,6 @@ def read_section_headers(data, number_of_sections):
             SECTION_HEADERS_START + (section_i * SECTION_HEADER_SIZE)
         )
         sections.append(section)
-        # TODO - make a method from it
-        section.should_strip = should_strip_section(section.characteristics)
     return sections
 
 
@@ -243,7 +227,7 @@ def process(sections):
     for section in sections:
         assert section.ptr_to_linenumbers == 0
         size_of_relocations = section.number_of_relocations * RELOCATION_SIZE
-        if should_strip_section(section.characteristics):
+        if section.should_strip_section():
             removed_bytes = removed_bytes + section.size_of_raw_data + size_of_relocations
             section.ptr_to_raw_data = 0
             section.ptr_to_relocations = 0
@@ -264,7 +248,7 @@ def write_section_headers(output, sections):
         section.write(output)
 
 
-def write_symbol_table(output, data, pointer_to_symbol_table, number_of_symbols, sections_to_strip):
+def write_symbol_table(output, data, pointer_to_symbol_table, number_of_symbols, sections_headers):
     aux_symbols = 0
     removing_symbol = False
     for i in range(0, number_of_symbols):
@@ -273,7 +257,7 @@ def write_symbol_table(output, data, pointer_to_symbol_table, number_of_symbols,
             aux_symbols, = struct.unpack_from(AUX_SYMBOLS_FORMAT, data, start + AUX_SYMBOLS_OFFSET)
             section, = struct.unpack_from(SECTION_SYMBOL_FORMAT, data, start + SECTION_SYMBOL_OFFSET)
             if section > 0:
-                removing_symbol = (section - 1) in sections_to_strip
+                removing_symbol = sections_headers[section - 1].should_strip_section()
             else:
                 removing_symbol = False
             output.fromstring(data[start : start + SYMBOL_SIZE])
@@ -303,7 +287,6 @@ def strip(input_file, out_file):
     old_pointer_to_symbol_table = header.pointer_to_symbol_table
     section_headers = read_section_headers(data, header.number_of_sections)
     removed_bytes, to_copy = process(section_headers)
-    sections_to_strip = find_sections_to_strip(data, header.number_of_sections)
     to_copy_string_section = [
         (header.pointer_to_symbol_table + SYMBOL_SIZE * header.number_of_symbols, len(data)),
     ]
@@ -324,7 +307,7 @@ def strip(input_file, out_file):
         data,
         old_pointer_to_symbol_table,
         header.number_of_symbols,
-        sections_to_strip)
+        section_headers)
 
     for start, end in to_copy_string_section:
         output.fromstring(data[start:end])
