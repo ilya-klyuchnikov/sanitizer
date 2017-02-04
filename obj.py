@@ -56,9 +56,12 @@ RELOCATION_SIZE = 10
 # see spec
 IMAGE_SCN_MEM_DISCARDABLE = 0x02000000
 IMAGE_SCN_LNK_COMDAT = 0x00001000
-# https://docs.python.org/2/library/struct.html
 
 SYMBOL_SIZE = 18
+AUX_SYMBOLS_FORMAT = '<B'
+AUX_SYMBOLS_OFFSET = 17
+SECTION_SYMBOL_FORMAT = '<h'
+SECTION_SYMBOL_OFFSET = 12
 
 
 class FileHeader(object):
@@ -201,7 +204,6 @@ class SectionHeader(object):
             struct.pack(SECTION_HEADER_CHARACTERISTICS_FORMAT, self.characteristics))
 
 
-
 def should_strip_section(sec_characteristics):
     # IMAGE_SCN_LNK_COMDAT - debug$S may have IMAGE_SCN_LNK_COMDAT for imported functions
     return (sec_characteristics & IMAGE_SCN_MEM_DISCARDABLE != 0) and (sec_characteristics & IMAGE_SCN_LNK_COMDAT == 0)
@@ -234,7 +236,8 @@ def read_section_headers(data, number_of_sections):
     return sections
 
 
-def process2(sections):
+def process(sections):
+    """modifies sections, returns a number of removed bytes and a list of pairs (start, end) to copy"""
     removed_bytes = 0
     to_copy = []
     for section in sections:
@@ -256,44 +259,7 @@ def process2(sections):
     return removed_bytes, to_copy
 
 
-def process(data, number_of_sections, sections_to_strip):
-    """stripped sections: raw data is removed, relocations are removed"""
-    sections = []
-    removed_bytes = 0
-    to_copy = []
-    for section_i in range(0, number_of_sections):
-        this_start = SECTION_HEADERS_START + section_i * SECTION_HEADER_SIZE
-        size_of_raw_data, = struct.unpack_from(SECTION_HEADER_SIZE_OF_RAW_DATA_FORMAT, data, this_start + SECTION_HEADER_SIZE_OF_RAW_DATA_OFFSET)
-        ptr_to_raw_data, = struct.unpack_from(SECTION_HEADER_PTR_TO_RAW_DATA_FORMAT, data, this_start + SECTION_HEADER_PTR_TO_RAW_DATA_OFFSET)
-        ptr_to_relocations, = struct.unpack_from(SECTION_HEADER_PTR_TO_RELOCATIONS_FORMAT, data, this_start + SECTION_HEADER_PTR_TO_RELOCATIONS_OFFSET)
-        # 5.3. COFF Line Numbers (Deprecated)
-        # COFF line numbers are no longer produced and, in the future, will not be consumed.
-
-        ptr_to_line_numbers, = struct.unpack_from(SECTION_HEADER_PTR_TO_LINE_NUMBERS_FORMAT, data, this_start + SECTION_HEADER_PTR_TO_LINE_NUMBERS_OFFSET)
-        assert ptr_to_line_numbers == 0
-
-        number_of_relocations, = struct.unpack_from(SECTION_HEADER_NUMBER_OF_RELOCATIONS_FORMAT, data, this_start + SECTION_HEADER_NUMBER_OF_RELOCATIONS_OFFSET)
-        number_of_line_numbers, = struct.unpack_from(SECTION_HEADER_NUMBER_OF_LINENUMBERS_FORMAT, data, this_start + SECTION_HEADER_NUMBER_OF_LINENUMBERS_OFFSET)
-        assert number_of_line_numbers == 0
-
-        size_of_relocations = number_of_relocations * RELOCATION_SIZE
-
-        if section_i in sections_to_strip:
-            removed_bytes = removed_bytes + size_of_raw_data + (size_of_relocations)
-            sections.append((0, 0, 0))
-        else:
-            sections.append((max(ptr_to_raw_data - removed_bytes, 0), max(ptr_to_relocations - removed_bytes, 0), size_of_raw_data))
-
-        if section_i not in sections_to_strip:
-            if size_of_raw_data > 0 and ptr_to_raw_data > 0:
-                to_copy.append((ptr_to_raw_data, ptr_to_raw_data + size_of_raw_data))
-            if number_of_relocations > 0:
-                to_copy.append((ptr_to_relocations, ptr_to_relocations + size_of_relocations))
-
-    return sections, removed_bytes, to_copy
-
-
-def write_section_headers(output, data, sections, number_of_sections):
+def write_section_headers(output, sections):
     for section in sections:
         section.write(output)
 
@@ -304,8 +270,8 @@ def write_symbol_table(output, data, pointer_to_symbol_table, number_of_symbols,
     for i in range(0, number_of_symbols):
         start = pointer_to_symbol_table + SYMBOL_SIZE * i
         if aux_symbols == 0:
-            aux_symbols, = struct.unpack_from('<B', data, start + 17)
-            section, = struct.unpack_from('<h', data, start + 12)
+            aux_symbols, = struct.unpack_from(AUX_SYMBOLS_FORMAT, data, start + AUX_SYMBOLS_OFFSET)
+            section, = struct.unpack_from(SECTION_SYMBOL_FORMAT, data, start + SECTION_SYMBOL_OFFSET)
             if section > 0:
                 removing_symbol = (section - 1) in sections_to_strip
             else:
@@ -314,7 +280,7 @@ def write_symbol_table(output, data, pointer_to_symbol_table, number_of_symbols,
         else:
             aux_symbols -= 1
             if removing_symbol:
-                output.fromstring(str(bytearray(18)))
+                output.fromstring(str(bytearray(SYMBOL_SIZE)))
             else:
                 output.fromstring(data[start : start + SYMBOL_SIZE])
 
@@ -336,9 +302,8 @@ def strip(input_file, out_file):
 
     old_pointer_to_symbol_table = header.pointer_to_symbol_table
     section_headers = read_section_headers(data, header.number_of_sections)
-    removed_bytes, to_copy = process2(section_headers)
+    removed_bytes, to_copy = process(section_headers)
     sections_to_strip = find_sections_to_strip(data, header.number_of_sections)
-    #sections, removed_bytes, to_copy = process(data, header.number_of_sections, sections_to_strip)
     to_copy_string_section = [
         (header.pointer_to_symbol_table + SYMBOL_SIZE * header.number_of_symbols, len(data)),
     ]
@@ -346,13 +311,10 @@ def strip(input_file, out_file):
     header.time_date_stamp = 0
     header.pointer_to_symbol_table -= removed_bytes
 
-    header.write(
-        output)
+    header.write(output)
     write_section_headers(
         output,
-        data,
-        section_headers,
-        header.number_of_sections)
+        section_headers)
 
     for start, end in to_copy:
         output.fromstring(data[start:end])
