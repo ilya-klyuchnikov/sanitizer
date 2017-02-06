@@ -1,7 +1,7 @@
 import struct
 import array
 
-# 3.3. COFF File Header (Object and Image)
+# http://www.microsoft.com/whdc/system/platform/firmware/PECOFF.mspx
 MACHINE_OFFSET = 0
 MACHINE_FORMAT = '<h'
 
@@ -23,7 +23,6 @@ SIZE_OF_OPTIONAL_HEADER_FORMAT = '<h'
 CHARACTERISTICS_OFFSET = 18
 CHARACTERISTICS_FORMAT = '<h'
 
-# COFF File Header
 COFF_FILE_HEADER_SIZE = 20
 
 # 4. Section Table (Section Headers)
@@ -51,9 +50,7 @@ SECTION_HEADER_NUMBER_OF_LINENUMBERS_FORMAT = '<h'
 SECTION_HEADER_CHARACTERISTICS_OFFSET = 36
 SECTION_HEADER_CHARACTERISTICS_FORMAT = '<I'
 
-# 5.2. COFF Relocations (Object Only)
 RELOCATION_SIZE = 10
-# see spec
 IMAGE_SCN_MEM_DISCARDABLE = 0x02000000
 IMAGE_SCN_LNK_COMDAT = 0x00001000
 
@@ -274,7 +271,6 @@ def strip(input_file, out_file):
     Strips a COFF file produced by a MSVC compiler, removing non-deterministic information.
 
     """
-    # http://www.microsoft.com/whdc/system/platform/firmware/PECOFF.mspx
 
     with open(input_file, 'rb') as ifile:
         data = ifile.read()
