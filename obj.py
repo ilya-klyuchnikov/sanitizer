@@ -3,12 +3,12 @@ import array
 
 # http://www.microsoft.com/whdc/system/platform/firmware/PECOFF.mspx
 MACHINE_OFFSET = 0
-MACHINE_FORMAT = '<h'
+MACHINE_FORMAT = '<H'
 
 NUMBER_OF_SECTIONS_OFFSET = 2
-NUMBER_OF_SECTIONS_FORMAT = '<h'
+NUMBER_OF_SECTIONS_FORMAT = '<H'
 
-TIME_DATE_STAMP_OFFSET = 6
+TIME_DATE_STAMP_OFFSET = 4
 TIME_DATE_STAMP_FORMAT = '<I'
 
 POINTER_TO_SYMBOL_TABLE_OFFSET = 8
@@ -18,10 +18,10 @@ NUMBER_OF_SYMBOLS_OFFSET = 12
 NUMBER_OF_SYMBOLS_FORMAT = '<I'
 
 SIZE_OF_OPTIONAL_HEADER_OFFSET = 16
-SIZE_OF_OPTIONAL_HEADER_FORMAT = '<h'
+SIZE_OF_OPTIONAL_HEADER_FORMAT = '<H'
 
 CHARACTERISTICS_OFFSET = 18
-CHARACTERISTICS_FORMAT = '<h'
+CHARACTERISTICS_FORMAT = '<H'
 
 COFF_FILE_HEADER_SIZE = 20
 
@@ -44,9 +44,9 @@ SECTION_HEADER_PTR_TO_RELOCATIONS_FORMAT = '<I'
 SECTION_HEADER_PTR_TO_LINE_NUMBERS_OFFSET = 28
 SECTION_HEADER_PTR_TO_LINE_NUMBERS_FORMAT = '<I'
 SECTION_HEADER_NUMBER_OF_RELOCATIONS_OFFSET = 32
-SECTION_HEADER_NUMBER_OF_RELOCATIONS_FORMAT = '<h'
+SECTION_HEADER_NUMBER_OF_RELOCATIONS_FORMAT = '<H'
 SECTION_HEADER_NUMBER_OF_LINENUMBERS_OFFSET = 34
-SECTION_HEADER_NUMBER_OF_LINENUMBERS_FORMAT = '<h'
+SECTION_HEADER_NUMBER_OF_LINENUMBERS_FORMAT = '<H'
 SECTION_HEADER_CHARACTERISTICS_OFFSET = 36
 SECTION_HEADER_CHARACTERISTICS_FORMAT = '<I'
 
@@ -250,20 +250,21 @@ def write_symbol_table(output, data, pointer_to_symbol_table, number_of_symbols,
     removing_symbol = False
     for i in range(0, number_of_symbols):
         start = pointer_to_symbol_table + SYMBOL_SIZE * i
+        symbol = data[start: start + SYMBOL_SIZE]
         if aux_symbols == 0:
-            aux_symbols, = struct.unpack_from(AUX_SYMBOLS_FORMAT, data, start + AUX_SYMBOLS_OFFSET)
-            section, = struct.unpack_from(SECTION_SYMBOL_FORMAT, data, start + SECTION_SYMBOL_OFFSET)
+            aux_symbols, = struct.unpack_from(AUX_SYMBOLS_FORMAT, symbol, AUX_SYMBOLS_OFFSET)
+            section, = struct.unpack_from(SECTION_SYMBOL_FORMAT, symbol, SECTION_SYMBOL_OFFSET)
             if section > 0:
                 removing_symbol = sections_headers[section - 1].should_strip_section()
             else:
                 removing_symbol = False
-            output.fromstring(data[start : start + SYMBOL_SIZE])
+            output.fromstring(symbol)
         else:
             aux_symbols -= 1
             if removing_symbol:
                 output.fromstring(str(bytearray(SYMBOL_SIZE)))
             else:
-                output.fromstring(data[start : start + SYMBOL_SIZE])
+                output.fromstring(symbol)
 
 
 def strip(input_file, out_file):
