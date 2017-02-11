@@ -225,6 +225,7 @@ DEBUG_S_STRINGTABLE = 243
 DEBUG_S_FILECHKSMS  = 244
 DEBUG_S_FRAMEDATA   = 245
 S_OBJNAME       =  0x1101  # path to object file name
+S_BUILDINFO      = 0x114c
 
 def dump_sections(data, section_headers):
     fNoCvSig = False
@@ -267,7 +268,9 @@ def dump_sections(data, section_headers):
                                     name, = struct.unpack_from(fmt, data, section_header.ptr_to_raw_data + ibSym + 8)
                                     # null terminated
                                     print '    S_OBJNAME: {0}'.format(name)
-
+                                elif type == S_BUILDINFO:
+                                    id, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data + ibSym + 4)
+                                    print '    S_BUILDINFO: {0}'.format(id)
                                 else:
                                     print '    UNKNOWN SYMBOL'
 
@@ -312,12 +315,11 @@ def dump_sections(data, section_headers):
         if section_header.name == '.debug$T':
             print '.debug$T'
             ib = 0
-            # sig
-            ib = 4
+            ib += 4 # sig
             while ib < section_header.size_of_raw_data:
                 s_len, = struct.unpack_from('<H', data, section_header.ptr_to_raw_data + ib)
                 print 'slen: {}'.format(s_len)
-                ib += 2
+                ib += 2 # s_len
                 s_data = data[section_header.ptr_to_raw_data + ib : section_header.ptr_to_raw_data + ib + s_len]
                 print s_data
                 ib += s_len
@@ -334,5 +336,5 @@ def dump(input_file):
     dump_sections(data, section_headers)
 
 
-#dump('/Volumes/C/workspace/main.obj')
-dump('main-2.obj')
+dump('/Volumes/C/workspace/main.obj')
+#dump('main-2.obj')
