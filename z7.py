@@ -248,6 +248,10 @@ class DebugSection(object):
         for subsection in self.subsections:
             subsection.dump()
 
+    def patch(self):
+        for subsection in self.subsections:
+            subsection.patch()
+
 class DebugSubsection(object):
     pass
 
@@ -259,6 +263,9 @@ class DebugGenericSubsection(DebugSubsection):
     def dump(self):
         pass
 
+    def patch(self):
+        pass
+
 
 class DebugSymbolsSubsection(DebugSubsection):
     def __init__(self, symbols):
@@ -267,6 +274,9 @@ class DebugSymbolsSubsection(DebugSubsection):
     def dump(self):
         for symbol in self.symbols:
             symbol.dump()
+
+    def patch(self):
+        pass
 
 
 class DebugFramedataSubsection(DebugSubsection):
@@ -279,6 +289,9 @@ class DebugFramedataSubsection(DebugSubsection):
         ppointer, = struct.unpack_from('<I', self.subsection_data, 8 + 4 + 5 * 4)
         print '    pointer: {0}'.format(hex(ppointer))
 
+    def patch(self):
+        pass
+
 
 class DebugStringTableSubsection(DebugSubsection):
     def __init__(self, subsection_data):
@@ -289,6 +302,9 @@ class DebugStringTableSubsection(DebugSubsection):
         table = self.subsection_data[8:]
         strs = table.split('\0')
         print strs
+
+    def patch(self):
+        pass
 
 
 class DebugFileChkSumSubsection(DebugSubsection):
@@ -305,6 +321,9 @@ class DebugFileChkSumSubsection(DebugSubsection):
             print '     oFFSET: {0}'.format(hex(offset))
             ibSym += 24
             left -= 24
+
+    def patch(self):
+        pass
 
 
 class Symbol(object):
@@ -327,6 +346,9 @@ class ObjNameSymbol(Symbol):
         # null terminated
         print '    S_OBJNAME: {0}'.format(name)
 
+    def patch(self):
+        pass
+
 
 class BuildInfoSymbol(Symbol):
     def __init__(self, subsection_data):
@@ -337,12 +359,18 @@ class BuildInfoSymbol(Symbol):
         id, = struct.unpack_from('<I', self.subsection_data, 4)
         print '    S_BUILDINFO: {0}'.format(hex(id))
 
+    def patch(self):
+        pass
+
 
 class GenericSymbol(Symbol):
     def __init__(self, subsection_data):
         self.subsection_data = subsection_data
 
     def dump(self):
+        pass
+
+    def patch(self):
         pass
 
 
@@ -355,6 +383,9 @@ class TypesSection(object):
         for leaf in self.leaves:
             leaf.dump(i)
             i += 1
+
+    def patch(self):
+        pass
 
 class Leaf(object):
     pass
@@ -559,6 +590,10 @@ def dump(input_file):
     for header, result in results:
         print '>>>>> {0}'.format(header.name)
         result.dump()
+
+    for header, result in results:
+        print '>>>>> {0}'.format(header.name)
+        result.patch()
 
 
 dump('experiments/01/01.obj')
