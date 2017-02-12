@@ -237,9 +237,7 @@ def dump_sections(data, section_headers):
         if section_header.name == '.debug$S':
             print '.debug$S'
             sig, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data)
-            if sig != 4:
-                print "UNEXPECTED SIGNATURE"
-                continue
+            assert sig == 4
             pointer = 4
 
             while pointer < section_header.size_of_raw_data:
@@ -290,18 +288,19 @@ def dump_sections(data, section_headers):
                         left -= (2 + reclen)
 
                 elif subsection_type == DEBUG_S_FRAMEDATA:
-                    ibSym = pointer
+                    ibSym = 8
                     print '  FRAMEDATA'
-                    rva = struct.unpack_from('<I', data, section_header.ptr_to_raw_data + ibSym)
+                    rva = struct.unpack_from('<I', subsection, ibSym)
 
                     # TODO reading in cycle
                     # the size of data - 32
-                    ppointer, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data + ibSym + 4 + 5 * 4)
+                    ppointer, = struct.unpack_from('<I', subsection, ibSym + 4 + 5 * 4)
                     print '    pointer: {0}'.format(hex(ppointer))
                 elif subsection_type == DEBUG_S_STRINGTABLE:
+                    ibSym = 8
                     print '  STRINGTABLE'
                     fmt = '{0}s'.format(subsection_len)
-                    table, = struct.unpack_from(fmt, data, section_header.ptr_to_raw_data + pointer)
+                    table, = struct.unpack_from(fmt, subsection, ibSym)
                     strs = table.split('\0')
                     table2 = '\0'.join(strs)
                     i = table.find('$T0 $ebp')
@@ -311,11 +310,10 @@ def dump_sections(data, section_headers):
                     print hex(i)
                 elif subsection_type == DEBUG_S_FILECHKSMS:
                     print '  FILECHKSMS'
-                    ibSym = pointer
+                    ibSym = 8
                     left = subsection_len
                     while left > 0:
-                        my_data = data[
-                                  section_header.ptr_to_raw_data + ibSym:section_header.ptr_to_raw_data + ibSym + 24]
+                        my_data = subsection[ibSym:ibSym + 24]
                         offset, = struct.unpack_from('<I', my_data, 0)
                         print '     oFFSET: {0}'.format(hex(offset))
                         ibSym += 24
@@ -328,9 +326,8 @@ def dump_sections(data, section_headers):
         if section_header.name == '.debug$T':
             print '.debug$T'
             sig, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data)
-            if sig != 4:
-                print "UNEXPECTED SIGNATURE"
-                continue
+
+            assert sig == 4
 
             pointer = 0
             pointer += 4 # sig
