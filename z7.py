@@ -202,7 +202,7 @@ class SectionHeader(object):
 
     def should_strip_section(self):
         # IMAGE_SCN_LNK_COMDAT - debug$S may have IMAGE_SCN_LNK_COMDAT for imported functions
-        return (self.characteristics & IMAGE_SCN_MEM_DISCARDABLE != 0) and (self.characteristics & IMAGE_SCN_LNK_COMDAT == 0)
+        return False
 
 
 def read_section_headers(data, number_of_sections):
@@ -239,40 +239,68 @@ class DebugSection(object):
         for subsection in self.subsections:
             subsection.dump()
 
-    def patch(self, s1, s2):
+    def patch(self):
         for subsection in self.subsections:
-            subsection.patch(s1, s2)
+            subsection.patch()
+
+    def patched_result(self, data_output):
+        data_output.fromstring(struct.pack('<I', 4))
+        for subsection in self.subsections:
+            subsection.patched_result(data_output)
+            if (subsection.subsection_len % 4) != 0:
+                 padding = 4 - (subsection.subsection_len % 4)
+                 data_output.extend(bytearray(padding))
+
 
 class DebugSubsection(object):
     pass
 
 
 class DebugGenericSubsection(DebugSubsection):
-    def __init__(self, subsection_data):
+    def __init__(self, subsection_type, subsection_len, subsection_data):
+        self.subsection_type = subsection_type
+        self.subsection_len = subsection_len
         self.subsection_data = subsection_data
 
     def dump(self):
         pass
 
-    def patch(self, s1, s2):
+    def patch(self):
         pass
+
+    def patched_result(self, data_output):
+        #data_output.fromstring(struct.pack('<I', self.subsection_type))
+        #data_output.fromstring(struct.pack('<I', self.subsection_len))
+        data_output.fromstring(self.subsection_data)
 
 
 class DebugSymbolsSubsection(DebugSubsection):
-    def __init__(self, symbols):
+    def __init__(self, subsection_type, subsection_len, symbols):
+        self.subsection_type = subsection_type
+        self.subsection_len = subsection_len
         self.symbols = symbols
 
     def dump(self):
         for symbol in self.symbols:
             symbol.dump()
 
-    def patch(self, s1, s2):
+    def patch(self):
         for symbol in self.symbols:
-            symbol.patch(s1, s2)
+            symbol.patch()
+
+    def patched_result(self, data_output):
+        # data_output.fromstring(struct.pack('<I', DEBUG_S_SYMBOLS))
+        # data_output.fromstring(struct.pack('<I', 100))
+        data_output.fromstring(struct.pack('<I', self.subsection_type))
+        data_output.fromstring(struct.pack('<I', self.subsection_len))
+        for symbol in self.symbols:
+            symbol.patched_result(data_output)
 
 
 class DebugFramedataSubsection(DebugSubsection):
-    def __init__(self, subsection_data):
+    def __init__(self, subsection_type, subsection_len, subsection_data):
+        self.subsection_type = subsection_type
+        self.subsection_len = subsection_len
         self.subsection_data = subsection_data
 
     def dump(self):
@@ -281,13 +309,23 @@ class DebugFramedataSubsection(DebugSubsection):
         ppointer, = struct.unpack_from('<I', self.subsection_data, 8 + 4 + 5 * 4)
         print '    pointer: {0}'.format(hex(ppointer))
 
-    def patch(self, s1, s2):
+    def patch(self):
         pass
+
+    def patched_result(self, data_output):
+        # data_output.fromstring(struct.pack('<I', DEBUG_S_FRAMEDATA))
+        # data_output.fromstring(struct.pack('<I', 100))
+        #data_output.fromstring(struct.pack('<I', self.subsection_type))
+        #data_output.fromstring(struct.pack('<I', self.subsection_len))
+        data_output.fromstring(self.subsection_data)
 
 
 class DebugStringTableSubsection(DebugSubsection):
-    def __init__(self, subsection_data):
+    def __init__(self, subsection_type, subsection_len, subsection_data):
+        self.subsection_type = subsection_type
+        self.subsection_len = subsection_len
         self.subsection_data = subsection_data
+        self.init()
 
     def dump(self):
         print '  STRINGTABLE'
@@ -295,7 +333,10 @@ class DebugStringTableSubsection(DebugSubsection):
         strs = table.split('\0')
         print strs
 
-    def patch(self, s1, s2):
+    def patch(self):
+        pass
+
+    def init(self):
         table = self.subsection_data[8:]
         delims = []
         strings = []
@@ -330,17 +371,24 @@ class DebugStringTableSubsection(DebugSubsection):
         for n in next_indices:
             print(hex(n))
 
-        subst = {}
         for i in range(0, len(ss1)):
-            subst[delims[i]] = next_indices[i]
+            mapping[delims[i]] = next_indices[i]
             print '{0} -> {1}'.format(hex(delims[i]), hex(next_indices[i]))
 
         #print subst
 
+    def patched_result(self, data_output):
+        # data_output.fromstring(struct.pack('<I', DEBUG_S_STRINGTABLE))
+        # data_output.fromstring(struct.pack('<I', 100))
+        #data_output.fromstring(struct.pack('<I', self.subsection_type))
+        #data_output.fromstring(struct.pack('<I', self.subsection_len))
+        data_output.fromstring(self.subsection_data)
 
 
 class DebugFileChkSumSubsection(DebugSubsection):
-    def __init__(self, subsection_data):
+    def __init__(self, subsection_type, subsection_len, subsection_data):
+        self.subsection_type = subsection_type
+        self.subsection_len = subsection_len
         self.subsection_data = subsection_data
 
     def dump(self):
@@ -354,8 +402,15 @@ class DebugFileChkSumSubsection(DebugSubsection):
             ibSym += 24
             left -= 24
 
-    def patch(self, s1, s2):
+    def patch(self):
         pass
+
+    def patched_result(self, data_output):
+        # data_output.fromstring(struct.pack('<I', DEBUG_S_FILECHKSMS))
+        # data_output.fromstring(struct.pack('<I', 100))
+        #data_output.fromstring(struct.pack('<I', self.subsection_type))
+        #data_output.fromstring(struct.pack('<I', self.subsection_len))
+        data_output.fromstring(self.subsection_data)
 
 
 class Symbol(object):
@@ -380,11 +435,14 @@ class ObjNameSymbol(Symbol):
         print '    S_OBJNAME: {0}'.format(name)
 
 
-    def patch(self, s1, s2):
+    def patch(self):
         name = self.subsection_data[8:]
         result = name.replace(s1, s2)
         print "   S_OBJNAME: {0} -> {1}".format(name, result)
         pass
+
+    def patched_result(self, data_output):
+        data_output.fromstring(self.subsection_data)
 
 
 class BuildInfoSymbol(Symbol):
@@ -396,8 +454,11 @@ class BuildInfoSymbol(Symbol):
         id, = struct.unpack_from('<I', self.subsection_data, 4)
         print '    S_BUILDINFO: {0}'.format(hex(id))
 
-    def patch(self, s1, s2):
+    def patch(self):
         pass
+
+    def patched_result(self, data_output):
+        data_output.fromstring(self.subsection_data)
 
 
 class GenericSymbol(Symbol):
@@ -407,8 +468,11 @@ class GenericSymbol(Symbol):
     def dump(self):
         pass
 
-    def patch(self, s1, s2):
+    def patch(self):
         pass
+
+    def patched_result(self, data_output):
+        data_output.fromstring(self.subsection_data)
 
 
 class TypesSection(object):
@@ -421,8 +485,13 @@ class TypesSection(object):
             leaf.dump(i)
             i += 1
 
-    def patch(self, s1, s2):
+    def patch(self):
         pass
+
+    def patched_result(self, data_output):
+        data_output.fromstring(struct.pack('<I', 4))
+        for leaf in self.leaves:
+            leaf.patched_result(data_output)
 
 class Leaf(object):
     pass
@@ -433,6 +502,9 @@ class LeafGeneric(Leaf):
 
     def dump(self, id):
         pass
+
+    def patched_result(self, data_output):
+        data_output.fromstring(self.data)
 
 class BuildInfoLeaf(Leaf):
     def __init__(self, data):
@@ -448,6 +520,9 @@ class BuildInfoLeaf(Leaf):
             ref, = struct.unpack_from('<I', self.data, 6 + i * 4)
             print '             |LF_BUILDINFO: ref:{0}'.format(hex(ref))
 
+    def patched_result(self, data_output):
+        data_output.fromstring(self.data)
+
 class StringLeaf(Leaf):
     def __init__(self, data):
         self.data = data
@@ -460,6 +535,9 @@ class StringLeaf(Leaf):
         print '   LF_STRING_ID'
         print '             |substringref:{0}'.format(hex(ref))
         print '             |s:{0}'.format(s)
+
+    def patched_result(self, data_output):
+        data_output.fromstring(self.data)
 
 class SubstringLeaf(Leaf):
     def __init__(self, data):
@@ -475,13 +553,15 @@ class SubstringLeaf(Leaf):
             ref, = struct.unpack_from('<I', self.data, 8 + i * 4)
             print '             |LF_SUBSTR_LIST: ref:{0}'.format(hex(ref))
 
+    def patched_result(self, data_output):
+        data_output.fromstring(self.data)
+
 # returns pairs (section_header, data) - where data to modify
 def dump_sections(data, section_headers):
     section_results = []
     for section_header in section_headers:
         section_result = dump_section(data, section_header)
-        if section_result:
-            section_results.append((section_header, section_result))
+        section_results.append(section_result)
     return section_results
 
 
@@ -493,6 +573,9 @@ def dump_section(data, section_header):
         to_change = False
         subsections = []
         while pointer < section_header.size_of_raw_data:
+
+            xxx_start = section_header.ptr_to_raw_data + pointer
+            print "START: {0}".format(hex(xxx_start))
 
             if (pointer % 4) != 0:
                 padding = 4 - (pointer % 4)
@@ -508,12 +591,14 @@ def dump_section(data, section_header):
             subsection_len, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data + pointer)
             pointer += 4
 
+            # subsection includes type and len!!
             subsection = data[
                          section_header.ptr_to_raw_data + subsection_start: section_header.ptr_to_raw_data + subsection_start + subsection_len + 8]
 
             assert subsection_len != 0
 
             if subsection_type == DEBUG_S_SYMBOLS:
+
                 ibSym = 8
                 left = subsection_len
                 to_change_this = False
@@ -549,23 +634,28 @@ def dump_section(data, section_header):
                     ibSym += 2 + reclen  # type
                     left -= (2 + reclen)
                 if to_change_this:
-                    subsections.append(DebugSymbolsSubsection(symbols))
+                    print "DEBUG_S_SYMBOLS: {0}".format(hex(xxx_start))
+                    subsections.append(DebugSymbolsSubsection(subsection_type, subsection_len, symbols))
                 else:
-                    subsections.append(DebugGenericSubsection(subsection))
+                    print "OTHER: {0}".format(hex(xxx_start))
+                    subsections.append(DebugGenericSubsection(subsection_type, subsection_len, subsection))
 
             elif subsection_type == DEBUG_S_FRAMEDATA:
+                print "DEBUG_S_FRAMEDATA: {0}".format(hex(xxx_start))
                 # easy
                 ibSym = 8
                 assert subsection_len == 36
 
                 # TODO reading in cycle
                 to_change = True
-                subsections.append(DebugFramedataSubsection(subsection))
+                subsections.append(DebugFramedataSubsection(subsection_type, subsection_len, subsection))
             elif subsection_type == DEBUG_S_STRINGTABLE:
+                print "DEBUG_S_STRINGTABLE: {0}".format(hex(xxx_start))
                 ibSym = 8
                 to_change = True
-                subsections.append(DebugStringTableSubsection(subsection))
+                subsections.append(DebugStringTableSubsection(subsection_type, subsection_len, subsection))
             elif subsection_type == DEBUG_S_FILECHKSMS:
+                print "DEBUG_S_FILECHKSMS: {0}".format(hex(xxx_start))
                 #print '  FILECHKSMS'
                 ibSym = 8
                 left = subsection_len
@@ -576,9 +666,10 @@ def dump_section(data, section_header):
                     ibSym += 24
                     left -= 24
                 to_change = True
-                subsections.append(DebugFileChkSumSubsection(subsection))
+                subsections.append(DebugFileChkSumSubsection(subsection_type, subsection_len, subsection))
             else:
-                subsections.append(DebugGenericSubsection(subsection))
+                print "OTHER: {0}".format(hex(xxx_start))
+                subsections.append(DebugGenericSubsection(subsection_type, subsection_len, subsection))
 
             pointer = pointer + subsection_len
 
@@ -625,24 +716,118 @@ def dump_section(data, section_header):
 
     return None
 
+def process(sections, data, results, data_output):
+    """modifies sections, returns a number of removed bytes and a list of pairs (start, end) to copy"""
+    removed_bytes = 0
+    to_copy = []
+    for i in range(0, len(sections)):
+        section = sections[i]
+        result = results[i]
 
-def dump(input_file, s1, s2):
+        assert section.ptr_to_linenumbers == 0
+        size_of_relocations = section.number_of_relocations * RELOCATION_SIZE
+        # size_of_relocations = section.number_of_relocations * RELOCATION_SIZE
+        # if False: #section.should_strip_section():
+        #     removed_bytes = removed_bytes + section.size_of_raw_data + size_of_relocations
+        #     section.ptr_to_raw_data = 0
+        #     section.ptr_to_relocations = 0
+        #     section.size_of_raw_data = 0
+        # else:
+        #     if section.ptr_to_raw_data > 0 and section.size_of_raw_data > 0:
+        #         to_copy.append((section.ptr_to_raw_data, section.ptr_to_raw_data + section.size_of_raw_data))
+        #     if section.number_of_relocations > 0:
+        #         to_copy.append((section.ptr_to_relocations, section.ptr_to_relocations + size_of_relocations))
+        #     section.ptr_to_raw_data = max(section.ptr_to_raw_data - removed_bytes, 0)
+        #     section.ptr_to_relocations = max(section.ptr_to_relocations - removed_bytes, 0)
+        if result:
+            result.patched_result(data_output)
+        else:
+            if section.ptr_to_raw_data > 0 and section.size_of_raw_data > 0:
+                data_output.fromstring(data[section.ptr_to_raw_data: section.ptr_to_raw_data + section.size_of_raw_data])
+        # copying relocations
+        if section.number_of_relocations > 0:
+            data_output.fromstring(data[section.ptr_to_relocations: section.ptr_to_relocations + size_of_relocations])
+
+
+    return removed_bytes, to_copy
+
+
+def write_section_headers(output, sections):
+    for section in sections:
+        section.write(output)
+
+
+def write_symbol_table(output, data, pointer_to_symbol_table, number_of_symbols, sections_headers):
+    aux_symbols = 0
+    removing_symbol = False
+    for i in range(0, number_of_symbols):
+        start = pointer_to_symbol_table + SYMBOL_SIZE * i
+        symbol = data[start: start + SYMBOL_SIZE]
+        if aux_symbols == 0:
+            aux_symbols, = struct.unpack_from(AUX_SYMBOLS_FORMAT, symbol, AUX_SYMBOLS_OFFSET)
+            output.fromstring(symbol)
+        else:
+            aux_symbols -= 1
+            if removing_symbol:
+                output.fromstring(str(bytearray(SYMBOL_SIZE)))
+            else:
+                output.fromstring(symbol)
+
+
+def dump(input_file, out_file):
     with open(input_file, 'rb') as ifile:
         data = ifile.read()
 
-    header = FileHeader(data)
-    section_headers = read_section_headers(data, header.number_of_sections)
-    results = dump_sections(data, section_headers)
-    for header, result in results:
-        print '>>>>> {0}'.format(header.name)
-        result.dump()
+    output = array.array('b')
+    data_output = array.array('b')
 
-    for header, result in results:
-        result.patch(s1, s2)
+    header = FileHeader(data)
+    old_pointer_to_symbol_table = header.pointer_to_symbol_table
+    section_headers = read_section_headers(data, header.number_of_sections)
+    to_copy_string_section = header.pointer_to_symbol_table + SYMBOL_SIZE * header.number_of_symbols, len(data)
+
+    results = dump_sections(data, section_headers)
+    for result in results:
+        if result:
+            #result.dump()
+            pass
+
+    for result in results:
+        if result:
+            result.patch()
+
+
+
+
+    header.write(output)
+    write_section_headers(
+        output,
+        section_headers)
 
     # stage1: patching debug$S section
     # 1) S_OBJNAME
     # 2) string table
+    # 3) patch checksum
 
+    process(section_headers, data, results, data_output)
+    # write_symbol_table(
+    #     data_output,
+    #     data,
+    #     old_pointer_to_symbol_table,
+    #     header.number_of_symbols,
+    #     section_headers)
 
-dump('experiments/01/01.obj', 'Y:\\experiments\\01', 'Y:\\buck\\build')
+    start, end = to_copy_string_section
+    data_output.fromstring(data[old_pointer_to_symbol_table:start])
+    data_output.fromstring(data[start:end])
+
+    total_output = output + data_output
+    with open(out_file, 'wb') as ofile:
+        total_output.tofile(ofile)
+
+mapping = {}
+s1 = 'Y:\\experiments'
+s2 = 'Y:\\ixpiriments'
+
+dump('experiments/short.obj', 'experiments/short-1.obj')
+print mapping
