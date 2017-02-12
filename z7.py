@@ -227,6 +227,9 @@ DEBUG_S_FRAMEDATA   = 245
 S_OBJNAME       =  0x1101  # path to object file name
 S_BUILDINFO      = 0x114c
 
+LF_BUILDINFO     = 0x1603
+LF_STRING_ID     = 0x1605
+
 def dump_sections(data, section_headers):
     fNoCvSig = False
     sig = None
@@ -260,7 +263,7 @@ def dump_sections(data, section_headers):
                                 reclen, = struct.unpack_from('<H', data, section_header.ptr_to_raw_data + ibSym)
                                 type, = struct.unpack_from('<H', data, section_header.ptr_to_raw_data + ibSym + 2)
 
-                                print '    ibsym: {0}'.format(hex(ibSym))
+                                # print '    ibsym: {0}'.format(hex(ibSym))
                                 if type == S_OBJNAME:
                                     signature = struct.unpack_from('<I', data, section_header.ptr_to_raw_data + ibSym + 4)
                                     slen = reclen - 4 - 2 # (type, signature)
@@ -270,9 +273,10 @@ def dump_sections(data, section_headers):
                                     print '    S_OBJNAME: {0}'.format(name)
                                 elif type == S_BUILDINFO:
                                     id, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data + ibSym + 4)
-                                    print '    S_BUILDINFO: {0}'.format(id)
+                                    print '    S_BUILDINFO: {0}'.format(hex(id))
                                 else:
-                                    print '    UNKNOWN SYMBOL'
+                                    #print '    UNKNOWN SYMBOL'
+                                    pass
 
                                 ibSym += 2 + reclen
                                 left -= (2 + reclen)
@@ -316,14 +320,22 @@ def dump_sections(data, section_headers):
             print '.debug$T'
             ib = 0
             ib += 4 # sig
+            index = 0x1000
             while ib < section_header.size_of_raw_data:
                 s_len, = struct.unpack_from('<H', data, section_header.ptr_to_raw_data + ib)
-                print 'slen: {}'.format(s_len)
+                print '             {0} slen: {1}'.format(hex(index), s_len)
                 ib += 2 # s_len
-                s_data = data[section_header.ptr_to_raw_data + ib : section_header.ptr_to_raw_data + ib + s_len]
-                print s_data
-                ib += s_len
+                leaf, = struct.unpack_from('<H', data, section_header.ptr_to_raw_data + ib)
+                print '             |leaf:{0}'.format(hex(leaf))
+                s_data = data[section_header.ptr_to_raw_data + ib +2: section_header.ptr_to_raw_data + ib + s_len - 2]
+                print '             |{0}'.format(s_data)
+                if leaf == LF_STRING_ID:
+                    ref, = struct.unpack_from('<H', data, section_header.ptr_to_raw_data + ib + 2)
+                    print '             |{0}'.format((s_data,))
+                    print '             |ref:{0}'.format(hex(ref))
 
+                ib += s_len
+                index += 1
 
 
 def dump(input_file):
@@ -331,10 +343,8 @@ def dump(input_file):
         data = ifile.read()
 
     header = FileHeader(data)
-    old_pointer_to_symbol_table = header.pointer_to_symbol_table
     section_headers = read_section_headers(data, header.number_of_sections)
     dump_sections(data, section_headers)
 
 
 dump('/Volumes/C/workspace/main.obj')
-#dump('main-2.obj')
