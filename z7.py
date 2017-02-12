@@ -322,17 +322,27 @@ def dump_sections(data, section_headers):
             ib += 4 # sig
             index = 0x1000
             while ib < section_header.size_of_raw_data:
+                # the length of s_data
                 s_len, = struct.unpack_from('<H', data, section_header.ptr_to_raw_data + ib)
                 print '             {0} slen: {1}'.format(hex(index), s_len)
                 ib += 2 # s_len
                 leaf, = struct.unpack_from('<H', data, section_header.ptr_to_raw_data + ib)
                 print '             |leaf:{0}'.format(hex(leaf))
-                s_data = data[section_header.ptr_to_raw_data + ib +2: section_header.ptr_to_raw_data + ib + s_len - 2]
+                s_data = data[section_header.ptr_to_raw_data + ib +2: section_header.ptr_to_raw_data + ib + s_len]
                 print '             |{0}'.format(s_data)
                 if leaf == LF_STRING_ID:
                     ref, = struct.unpack_from('<H', data, section_header.ptr_to_raw_data + ib + 2)
                     print '             |{0}'.format((s_data,))
                     print '             |ref:{0}'.format(hex(ref))
+
+                if leaf == LF_BUILDINFO:
+                     count, = struct.unpack_from('<H', s_data, 0) #2
+                     print '             |LF_BUILDINFO: count:{0}'.format(count)
+                     # 20
+                     for i in range(0, count):
+                         ref, = struct.unpack_from('<I', s_data, 2 + i*4)
+                         print '             |LF_BUILDINFO: ref:{0}'.format(hex(ref))
+
 
                 ib += s_len
                 index += 1
@@ -347,4 +357,4 @@ def dump(input_file):
     dump_sections(data, section_headers)
 
 
-dump('/Volumes/C/workspace/main.obj')
+dump('experiments/01/01.obj')
