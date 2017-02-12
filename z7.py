@@ -228,6 +228,7 @@ S_OBJNAME       =  0x1101  # path to object file name
 S_BUILDINFO      = 0x114c
 
 LF_BUILDINFO     = 0x1603
+LF_SUBSTR_LIST   = 0x1604
 LF_STRING_ID     = 0x1605
 
 def dump_sections(data, section_headers):
@@ -327,22 +328,33 @@ def dump_sections(data, section_headers):
                 print '             {0} slen: {1}'.format(hex(index), s_len)
                 ib += 2 # s_len
                 leaf, = struct.unpack_from('<H', data, section_header.ptr_to_raw_data + ib)
+
                 print '             |leaf:{0}'.format(hex(leaf))
-                s_data = data[section_header.ptr_to_raw_data + ib +2: section_header.ptr_to_raw_data + ib + s_len]
-                print '             |{0}'.format(s_data)
+                # d_data is correct
+                d_data = data[section_header.ptr_to_raw_data + ib: section_header.ptr_to_raw_data + ib + s_len]
+                print '             |{0}'.format(':'.join(x.encode('hex') for x in d_data))
+                #print '             |{0}'.format(s_data)
                 if leaf == LF_STRING_ID:
-                    ref, = struct.unpack_from('<H', data, section_header.ptr_to_raw_data + ib + 2)
-                    print '             |{0}'.format((s_data,))
+                    ref, = struct.unpack_from('<H', d_data, 2)
+                    #print '             |{0}'.format((s_data,))
                     print '             |ref:{0}'.format(hex(ref))
 
                 if leaf == LF_BUILDINFO:
-                     count, = struct.unpack_from('<H', s_data, 0) #2
+                     count, = struct.unpack_from('<H', d_data, 2) #2
                      print '             |LF_BUILDINFO: count:{0}'.format(count)
-                     # 20
+                     # references
                      for i in range(0, count):
-                         ref, = struct.unpack_from('<I', s_data, 2 + i*4)
+                         ref, = struct.unpack_from('<I', d_data, 4 + i*4)
                          print '             |LF_BUILDINFO: ref:{0}'.format(hex(ref))
 
+
+                if leaf == LF_SUBSTR_LIST:
+                    count, = struct.unpack_from('<I', d_data, 2)  # 2
+                    print '             |LF_SUBSTR_LIST: count:{0}'.format(count)
+                    # references
+                    for i in range(0, count):
+                        ref, = struct.unpack_from('<I', d_data, 4 + i * 4)
+                        print '             |LF_SUBSTR_LIST: ref:{0}'.format(hex(ref))
 
                 ib += s_len
                 index += 1
