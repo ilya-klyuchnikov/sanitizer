@@ -231,142 +231,157 @@ LF_BUILDINFO     = 0x1603
 LF_SUBSTR_LIST   = 0x1604
 LF_STRING_ID     = 0x1605
 
-
+# returns pairs (section_header, data) - where data to modify
 def dump_sections(data, section_headers):
+    section_results = []
     for section_header in section_headers:
-        if section_header.name == '.debug$S':
-            print '.debug$S'
-            sig, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data)
-            assert sig == 4
-            pointer = 4
+        section_result = dump_section(data, section_header)
+        if section_result:
+            section_results.append(section_result)
+    return section_results
 
-            while pointer < section_header.size_of_raw_data:
 
-                if (pointer % 4) != 0:
-                    padding = 4 - (pointer % 4)
-                    pad = data[section_header.ptr_to_raw_data + pointer: section_header.ptr_to_raw_data + pointer + padding]
-                    pointer += padding
-                if pointer == section_header.size_of_raw_data:
-                    break
+def dump_section(data, section_header):
+    if section_header.name == '.debug$S':
+        print '.debug$S'
+        sig, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data)
+        assert sig == 4
+        pointer = 4
 
-                subsection_start = pointer
-                subsection_type, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data + pointer)
-                pointer += 4
+        while pointer < section_header.size_of_raw_data:
 
-                subsection_len, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data + pointer)
-                pointer += 4
+            if (pointer % 4) != 0:
+                padding = 4 - (pointer % 4)
+                pad = data[section_header.ptr_to_raw_data + pointer: section_header.ptr_to_raw_data + pointer + padding]
+                pointer += padding
+            if pointer == section_header.size_of_raw_data:
+                break
 
-                subsection = data[section_header.ptr_to_raw_data + subsection_start: section_header.ptr_to_raw_data + subsection_start + subsection_len + 8]
+            subsection_start = pointer
+            subsection_type, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data + pointer)
+            pointer += 4
 
-                assert subsection_len != 0
+            subsection_len, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data + pointer)
+            pointer += 4
 
-                if subsection_type == DEBUG_S_SYMBOLS:
-                    print '  SYMBOLS'
-                    ibSym = 8
-                    left = subsection_len
-                    while left > 0:
+            subsection = data[
+                         section_header.ptr_to_raw_data + subsection_start: section_header.ptr_to_raw_data + subsection_start + subsection_len + 8]
 
-                        reclen, = struct.unpack_from('<H', subsection, ibSym)
-                        type, = struct.unpack_from('<H', subsection, ibSym + 2)
+            assert subsection_len != 0
 
-                        # print '    ibsym: {0}'.format(hex(ibSym))
-                        if type == S_OBJNAME:
-                            signature = struct.unpack_from('<I', subsection, ibSym + 4)
-                            slen = reclen - 4 - 2  # (type, signature)
-                            fmt = '{0}s'.format(slen)
-                            name, = struct.unpack_from(fmt, subsection, ibSym + 8)
-                            # null terminated
-                            print '    S_OBJNAME: {0}'.format(name)
-                        elif type == S_BUILDINFO:
-                            id, = struct.unpack_from('<I', subsection, ibSym + 4)
-                            print '    S_BUILDINFO: {0}'.format(hex(id))
-                        else:
-                            # print '    UNKNOWN SYMBOL'
-                            pass
+            if subsection_type == DEBUG_S_SYMBOLS:
+                print '  SYMBOLS'
+                ibSym = 8
+                left = subsection_len
+                to_change_this = False
+                while left > 0:
 
-                        ibSym += 2 + reclen #type
-                        left -= (2 + reclen)
+                    reclen, = struct.unpack_from('<H', subsection, ibSym)  # 2
+                    symbolData = subsection[ibSym: ibSym + reclen + 2]
+                    type, = struct.unpack_from('<H', subsection, ibSym + 2)  # 2
+                    type_len = 2
 
-                elif subsection_type == DEBUG_S_FRAMEDATA:
-                    ibSym = 8
-                    print '  FRAMEDATA'
-                    rva = struct.unpack_from('<I', subsection, ibSym)
+                    # print '    ibsym: {0}'.format(hex(ibSym))
+                    if type == S_OBJNAME:
+                        to_change_this = True
+                        signature = struct.unpack_from('<I', symbolData, 4)
+                        signature_len = 4
+                        slen = reclen - signature_len - type_len  # (type, signature)
+                        fmt = '{0}s'.format(slen)
+                        name, = struct.unpack_from(fmt, symbolData, 8)
+                        # null terminated
+                        print '    S_OBJNAME: {0}'.format(name)
+                    elif type == S_BUILDINFO:
+                        id, = struct.unpack_from('<I', symbolData, 4)
+                        print '    S_BUILDINFO: {0}'.format(hex(id))
+                        to_change_this = True
+                    else:
+                        # print '    UNKNOWN SYMBOL'
+                        pass
 
-                    # TODO reading in cycle
-                    # the size of data - 32
-                    ppointer, = struct.unpack_from('<I', subsection, ibSym + 4 + 5 * 4)
-                    print '    pointer: {0}'.format(hex(ppointer))
-                elif subsection_type == DEBUG_S_STRINGTABLE:
-                    ibSym = 8
-                    print '  STRINGTABLE'
-                    fmt = '{0}s'.format(subsection_len)
-                    table, = struct.unpack_from(fmt, subsection, ibSym)
-                    strs = table.split('\0')
-                    table2 = '\0'.join(strs)
-                    i = table.find('$T0 $ebp')
-                    assert table == table2
-                    print table
-                    print strs
-                    print hex(i)
-                elif subsection_type == DEBUG_S_FILECHKSMS:
-                    print '  FILECHKSMS'
-                    ibSym = 8
-                    left = subsection_len
-                    while left > 0:
-                        my_data = subsection[ibSym:ibSym + 24]
-                        offset, = struct.unpack_from('<I', my_data, 0)
-                        print '     oFFSET: {0}'.format(hex(offset))
-                        ibSym += 24
-                        left -= 24
-                else:
-                    print '  UNKNOWN'
+                    ibSym += 2 + reclen  # type
+                    left -= (2 + reclen)
 
-                pointer = pointer + subsection_len
+            elif subsection_type == DEBUG_S_FRAMEDATA:
+                # easy
+                ibSym = 8
+                print '  FRAMEDATA'
+                rva = struct.unpack_from('<I', subsection, ibSym)
 
-        if section_header.name == '.debug$T':
-            print '.debug$T'
-            sig, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data)
+                # TODO reading in cycle
+                # the size of data - 32
+                ppointer, = struct.unpack_from('<I', subsection, ibSym + 4 + 5 * 4)
+                print '    pointer: {0}'.format(hex(ppointer))
+            elif subsection_type == DEBUG_S_STRINGTABLE:
+                ibSym = 8
+                print '  STRINGTABLE'
+                fmt = '{0}s'.format(subsection_len)
+                table, = struct.unpack_from(fmt, subsection, ibSym)
+                strs = table.split('\0')
+                table2 = '\0'.join(strs)
+                i = table.find('$T0 $ebp')
+                assert table == table2
+                print table
+                print strs
+                print hex(i)
+            elif subsection_type == DEBUG_S_FILECHKSMS:
+                print '  FILECHKSMS'
+                ibSym = 8
+                left = subsection_len
+                while left > 0:
+                    my_data = subsection[ibSym:ibSym + 24]
+                    offset, = struct.unpack_from('<I', my_data, 0)
+                    print '     oFFSET: {0}'.format(hex(offset))
+                    ibSym += 24
+                    left -= 24
+            else:
+                print '  UNKNOWN'
 
-            assert sig == 4
+            pointer = pointer + subsection_len
+    if section_header.name == '.debug$T':
+        print '.debug$T'
+        sig, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data)
 
-            pointer = 0
-            pointer += 4 # sig
-            index = 0x1000
-            while pointer < section_header.size_of_raw_data:
-                # padding assertions
-                assert (pointer % 4) == 0
-                # the length of s_data
-                s_len, = struct.unpack_from('<H', data, section_header.ptr_to_raw_data + pointer)
-                piece = data[section_header.ptr_to_raw_data + pointer: section_header.ptr_to_raw_data + pointer + s_len + 2]
-                print '             {0} slen: {1}'.format(hex(index), s_len)
-                pointer += 2 # s_len
-                leaf, = struct.unpack_from('<H', data, section_header.ptr_to_raw_data + pointer)
+        assert sig == 4
 
-                print '             |leaf:{0}'.format(hex(leaf))
-                print '             |{0}'.format(':'.join(x.encode('hex') for x in piece))
-                # print '             |{0}'.format(s_data)
-                if leaf == LF_STRING_ID:
-                    ref, = struct.unpack_from('<H', piece, 4)
-                    print '             |ref:{0}'.format(hex(ref))
+        pointer = 0
+        pointer += 4  # sig
+        index = 0x1000
+        while pointer < section_header.size_of_raw_data:
+            # padding assertions
+            assert (pointer % 4) == 0
+            # the length of s_data
+            s_len, = struct.unpack_from('<H', data, section_header.ptr_to_raw_data + pointer)
+            piece = data[section_header.ptr_to_raw_data + pointer: section_header.ptr_to_raw_data + pointer + s_len + 2]
+            print '             {0} slen: {1}'.format(hex(index), s_len)
+            pointer += 2  # s_len
+            leaf, = struct.unpack_from('<H', data, section_header.ptr_to_raw_data + pointer)
 
-                if leaf == LF_BUILDINFO:
-                    count, = struct.unpack_from('<H', piece, 4) #2
-                    print '             |LF_BUILDINFO: count:{0}'.format(count)
-                    # references
-                    for i in range(0, count):
-                        ref, = struct.unpack_from('<I', piece, 6 + i*4)
-                        print '             |LF_BUILDINFO: ref:{0}'.format(hex(ref))
+            print '             |leaf:{0}'.format(hex(leaf))
+            print '             |{0}'.format(':'.join(x.encode('hex') for x in piece))
+            # print '             |{0}'.format(s_data)
+            if leaf == LF_STRING_ID:
+                ref, = struct.unpack_from('<H', piece, 4)
+                print '             |ref:{0}'.format(hex(ref))
 
-                if leaf == LF_SUBSTR_LIST:
-                    count, = struct.unpack_from('<I', piece, 4)  # 2
-                    print '             |LF_SUBSTR_LIST: count:{0}'.format(count)
-                    # references
-                    for i in range(0, count):
-                        ref, = struct.unpack_from('<I', piece, 6 + i * 4)
-                        print '             |LF_SUBSTR_LIST: ref:{0}'.format(hex(ref))
+            if leaf == LF_BUILDINFO:
+                count, = struct.unpack_from('<H', piece, 4)  # 2
+                print '             |LF_BUILDINFO: count:{0}'.format(count)
+                # references
+                for i in range(0, count):
+                    ref, = struct.unpack_from('<I', piece, 6 + i * 4)
+                    print '             |LF_BUILDINFO: ref:{0}'.format(hex(ref))
 
-                pointer += s_len
-                index += 1
+            if leaf == LF_SUBSTR_LIST:
+                count, = struct.unpack_from('<I', piece, 4)  # 2
+                print '             |LF_SUBSTR_LIST: count:{0}'.format(count)
+                # references
+                for i in range(0, count):
+                    ref, = struct.unpack_from('<I', piece, 6 + i * 4)
+                    print '             |LF_SUBSTR_LIST: ref:{0}'.format(hex(ref))
+
+            pointer += s_len
+            index += 1
 
 
 def dump(input_file):
