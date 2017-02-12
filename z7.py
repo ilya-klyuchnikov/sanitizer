@@ -300,8 +300,8 @@ def dump_sections(data, section_headers):
 
                     # TODO reading in cycle
                     # the size of data - 32
-                    pointer, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data + ibSym + 4 + 5 * 4)
-                    print '    pointer: {0}'.format(hex(pointer))
+                    ppointer, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data + ibSym + 4 + 5 * 4)
+                    print '    pointer: {0}'.format(hex(ppointer))
 
                 if subsection_type == DEBUG_S_STRINGTABLE:
                     print '  STRINGTABLE'
