@@ -231,122 +231,136 @@ LF_BUILDINFO     = 0x1603
 LF_SUBSTR_LIST   = 0x1604
 LF_STRING_ID     = 0x1605
 
+
 def dump_sections(data, section_headers):
-    fNoCvSig = False
-    sig = None
     for section_header in section_headers:
         if section_header.name == '.debug$S':
             print '.debug$S'
-            if not fNoCvSig:
-                sig, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data)
-                if sig == 4:
-                    ib = 4
-                    while ib < section_header.size_of_raw_data:
-                        if ((ib % 4) != 0):
-                            cb = 4 - (ib % 4)
-                            ib += cb
-                        if ib == section_header.size_of_raw_data:
-                            break
-                        sst, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data + ib)
-                        ib += 4
-                        # length of section WTF!
-                        cb, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data + ib)
-                        ib += 4
-                        if cb == 0:
-                            cb = section_header.size_of_raw_data - ib
-                        # printing debug symbols
-                        if sst == DEBUG_S_SYMBOLS:
-                            print '  SYMBOLS'
-                            ibSym = ib
-                            left = cb
-                            while left > 0:
+            sig, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data)
+            if sig != 4:
+                print "UNEXPECTED SIGNATURE"
+                continue
+            pointer = 4
 
-                                reclen, = struct.unpack_from('<H', data, section_header.ptr_to_raw_data + ibSym)
-                                type, = struct.unpack_from('<H', data, section_header.ptr_to_raw_data + ibSym + 2)
+            while pointer < section_header.size_of_raw_data:
 
-                                # print '    ibsym: {0}'.format(hex(ibSym))
-                                if type == S_OBJNAME:
-                                    signature = struct.unpack_from('<I', data, section_header.ptr_to_raw_data + ibSym + 4)
-                                    slen = reclen - 4 - 2 # (type, signature)
-                                    fmt = '{0}s'.format(slen)
-                                    name, = struct.unpack_from(fmt, data, section_header.ptr_to_raw_data + ibSym + 8)
-                                    # null terminated
-                                    print '    S_OBJNAME: {0}'.format(name)
-                                elif type == S_BUILDINFO:
-                                    id, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data + ibSym + 4)
-                                    print '    S_BUILDINFO: {0}'.format(hex(id))
-                                else:
-                                    #print '    UNKNOWN SYMBOL'
-                                    pass
+                if (pointer % 4) != 0:
+                    padding = 4 - (pointer % 4)
+                    pad = data[section_header.ptr_to_raw_data + pointer: section_header.ptr_to_raw_data + pointer + padding]
+                    print '             |pad: {0}'.format(':'.join(x.encode('hex') for x in pad))
+                    pointer += padding
+                if pointer == section_header.size_of_raw_data:
+                    break
 
-                                ibSym += 2 + reclen
-                                left -= (2 + reclen)
+                subsection_type, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data + pointer)
+                pointer += 4
 
-                        if sst == DEBUG_S_FRAMEDATA:
-                            ibSym = ib
-                            print '  FRAMEDATA'
-                            rva = struct.unpack_from('<I', data, section_header.ptr_to_raw_data + ibSym)
+                # length of section WTF!
+                subsection_len, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data + pointer)
+                pointer += 4
 
-                            # TODO reading in cycle
-                            # the size of data - 32
-                            pointer, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data + ibSym + 4 + 5*4)
-                            print '    pointer: {0}'.format(hex(pointer))
+                if subsection_len == 0:
+                    subsection_len = section_header.size_of_raw_data - pointer
+                # printing debug symbols
+                if subsection_type == DEBUG_S_SYMBOLS:
+                    print '  SYMBOLS'
+                    ibSym = pointer
+                    left = subsection_len
+                    while left > 0:
 
-                        if sst == DEBUG_S_STRINGTABLE:
-                            print '  STRINGTABLE'
-                            fmt = '{0}s'.format(cb)
-                            table, = struct.unpack_from(fmt, data, section_header.ptr_to_raw_data + ib)
-                            strs = table.split('\0')
-                            table2 = '\0'.join(strs)
-                            i = table.find('$T0 $ebp')
-                            assert table == table2
-                            print table
-                            print strs
-                            print hex(i)
+                        reclen, = struct.unpack_from('<H', data, section_header.ptr_to_raw_data + ibSym)
+                        type, = struct.unpack_from('<H', data, section_header.ptr_to_raw_data + ibSym + 2)
 
-                        if sst == DEBUG_S_FILECHKSMS:
-                            print '  FILECHKSMS'
-                            ibSym = ib
-                            left = cb
-                            while left > 0:
-                                my_data = data[section_header.ptr_to_raw_data + ibSym:section_header.ptr_to_raw_data + ibSym + 24]
-                                offset, = struct.unpack_from('<I', my_data, 0)
-                                print '     oFFSET: {0}'.format(hex(offset))
-                                ibSym += 24
-                                left -= 24
+                        # print '    ibsym: {0}'.format(hex(ibSym))
+                        if type == S_OBJNAME:
+                            signature = struct.unpack_from('<I', data, section_header.ptr_to_raw_data + ibSym + 4)
+                            slen = reclen - 4 - 2  # (type, signature)
+                            fmt = '{0}s'.format(slen)
+                            name, = struct.unpack_from(fmt, data, section_header.ptr_to_raw_data + ibSym + 8)
+                            # null terminated
+                            print '    S_OBJNAME: {0}'.format(name)
+                        elif type == S_BUILDINFO:
+                            id, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data + ibSym + 4)
+                            print '    S_BUILDINFO: {0}'.format(hex(id))
+                        else:
+                            # print '    UNKNOWN SYMBOL'
+                            pass
 
-                        ib = ib + cb
+                        ibSym += 2 + reclen
+                        left -= (2 + reclen)
+
+                if subsection_type == DEBUG_S_FRAMEDATA:
+                    ibSym = pointer
+                    print '  FRAMEDATA'
+                    rva = struct.unpack_from('<I', data, section_header.ptr_to_raw_data + ibSym)
+
+                    # TODO reading in cycle
+                    # the size of data - 32
+                    pointer, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data + ibSym + 4 + 5 * 4)
+                    print '    pointer: {0}'.format(hex(pointer))
+
+                if subsection_type == DEBUG_S_STRINGTABLE:
+                    print '  STRINGTABLE'
+                    fmt = '{0}s'.format(subsection_len)
+                    table, = struct.unpack_from(fmt, data, section_header.ptr_to_raw_data + pointer)
+                    strs = table.split('\0')
+                    table2 = '\0'.join(strs)
+                    i = table.find('$T0 $ebp')
+                    assert table == table2
+                    print table
+                    print strs
+                    print hex(i)
+
+                if subsection_type == DEBUG_S_FILECHKSMS:
+                    print '  FILECHKSMS'
+                    ibSym = pointer
+                    left = subsection_len
+                    while left > 0:
+                        my_data = data[
+                                  section_header.ptr_to_raw_data + ibSym:section_header.ptr_to_raw_data + ibSym + 24]
+                        offset, = struct.unpack_from('<I', my_data, 0)
+                        print '     oFFSET: {0}'.format(hex(offset))
+                        ibSym += 24
+                        left -= 24
+
+                pointer = pointer + subsection_len
 
         if section_header.name == '.debug$T':
             print '.debug$T'
-            ib = 0
-            ib += 4 # sig
+            sig, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data)
+            if sig != 4:
+                print "UNEXPECTED SIGNATURE"
+                continue
+
+            pointer = 0
+            pointer += 4 # sig
             index = 0x1000
-            while ib < section_header.size_of_raw_data:
+            while pointer < section_header.size_of_raw_data:
+                # padding assertions
+                assert (pointer % 4) == 0
                 # the length of s_data
-                s_len, = struct.unpack_from('<H', data, section_header.ptr_to_raw_data + ib)
+                s_len, = struct.unpack_from('<H', data, section_header.ptr_to_raw_data + pointer)
                 print '             {0} slen: {1}'.format(hex(index), s_len)
-                ib += 2 # s_len
-                leaf, = struct.unpack_from('<H', data, section_header.ptr_to_raw_data + ib)
+                pointer += 2 # s_len
+                leaf, = struct.unpack_from('<H', data, section_header.ptr_to_raw_data + pointer)
 
                 print '             |leaf:{0}'.format(hex(leaf))
                 # d_data is correct
-                d_data = data[section_header.ptr_to_raw_data + ib: section_header.ptr_to_raw_data + ib + s_len]
+                d_data = data[section_header.ptr_to_raw_data + pointer: section_header.ptr_to_raw_data + pointer + s_len]
                 print '             |{0}'.format(':'.join(x.encode('hex') for x in d_data))
-                #print '             |{0}'.format(s_data)
+                # print '             |{0}'.format(s_data)
                 if leaf == LF_STRING_ID:
                     ref, = struct.unpack_from('<H', d_data, 2)
-                    #print '             |{0}'.format((s_data,))
+                    # print '             |{0}'.format((s_data,))
                     print '             |ref:{0}'.format(hex(ref))
 
                 if leaf == LF_BUILDINFO:
-                     count, = struct.unpack_from('<H', d_data, 2) #2
-                     print '             |LF_BUILDINFO: count:{0}'.format(count)
-                     # references
-                     for i in range(0, count):
-                         ref, = struct.unpack_from('<I', d_data, 4 + i*4)
-                         print '             |LF_BUILDINFO: ref:{0}'.format(hex(ref))
-
+                    count, = struct.unpack_from('<H', d_data, 2) #2
+                    print '             |LF_BUILDINFO: count:{0}'.format(count)
+                    # references
+                    for i in range(0, count):
+                        ref, = struct.unpack_from('<I', d_data, 4 + i*4)
+                        print '             |LF_BUILDINFO: ref:{0}'.format(hex(ref))
 
                 if leaf == LF_SUBSTR_LIST:
                     count, = struct.unpack_from('<I', d_data, 2)  # 2
@@ -356,7 +370,7 @@ def dump_sections(data, section_headers):
                         ref, = struct.unpack_from('<I', d_data, 4 + i * 4)
                         print '             |LF_SUBSTR_LIST: ref:{0}'.format(hex(ref))
 
-                ib += s_len
+                pointer += s_len
                 index += 1
 
 
