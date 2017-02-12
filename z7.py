@@ -247,44 +247,40 @@ def dump_sections(data, section_headers):
                 if (pointer % 4) != 0:
                     padding = 4 - (pointer % 4)
                     pad = data[section_header.ptr_to_raw_data + pointer: section_header.ptr_to_raw_data + pointer + padding]
-                    print '             |pad: {0}'.format(':'.join(x.encode('hex') for x in pad))
                     pointer += padding
                 if pointer == section_header.size_of_raw_data:
                     break
 
+                subsection_start = pointer
                 subsection_type, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data + pointer)
                 pointer += 4
 
-                # length of section WTF!
                 subsection_len, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data + pointer)
                 pointer += 4
 
-                if subsection_len == 0:
-                    subsection_len = section_header.size_of_raw_data - pointer
-                # printing debug symbols
+                subsection = data[section_header.ptr_to_raw_data + subsection_start: section_header.ptr_to_raw_data + subsection_start + subsection_len + 8]
+
+                assert subsection_len != 0
 
                 if subsection_type == DEBUG_S_SYMBOLS:
                     print '  SYMBOLS'
-                    ibSym = pointer
+                    ibSym = 8
                     left = subsection_len
                     while left > 0:
 
-                        reclen, = struct.unpack_from('<H', data, section_header.ptr_to_raw_data + ibSym)
-                        # including reclen
-                        piece = data[section_header.ptr_to_raw_data + ibSym: section_header.ptr_to_raw_data + ibSym + reclen + 2]
-
-                        type, = struct.unpack_from('<H', data, section_header.ptr_to_raw_data + ibSym + 2)
+                        reclen, = struct.unpack_from('<H', subsection, ibSym)
+                        type, = struct.unpack_from('<H', subsection, ibSym + 2)
 
                         # print '    ibsym: {0}'.format(hex(ibSym))
                         if type == S_OBJNAME:
-                            signature = struct.unpack_from('<I', data, section_header.ptr_to_raw_data + ibSym + 4)
+                            signature = struct.unpack_from('<I', subsection, ibSym + 4)
                             slen = reclen - 4 - 2  # (type, signature)
                             fmt = '{0}s'.format(slen)
-                            name, = struct.unpack_from(fmt, data, section_header.ptr_to_raw_data + ibSym + 8)
+                            name, = struct.unpack_from(fmt, subsection, ibSym + 8)
                             # null terminated
                             print '    S_OBJNAME: {0}'.format(name)
                         elif type == S_BUILDINFO:
-                            id, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data + ibSym + 4)
+                            id, = struct.unpack_from('<I', subsection, ibSym + 4)
                             print '    S_BUILDINFO: {0}'.format(hex(id))
                         else:
                             # print '    UNKNOWN SYMBOL'
@@ -293,7 +289,7 @@ def dump_sections(data, section_headers):
                         ibSym += 2 + reclen #type
                         left -= (2 + reclen)
 
-                if subsection_type == DEBUG_S_FRAMEDATA:
+                elif subsection_type == DEBUG_S_FRAMEDATA:
                     ibSym = pointer
                     print '  FRAMEDATA'
                     rva = struct.unpack_from('<I', data, section_header.ptr_to_raw_data + ibSym)
@@ -302,8 +298,7 @@ def dump_sections(data, section_headers):
                     # the size of data - 32
                     ppointer, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data + ibSym + 4 + 5 * 4)
                     print '    pointer: {0}'.format(hex(ppointer))
-
-                if subsection_type == DEBUG_S_STRINGTABLE:
+                elif subsection_type == DEBUG_S_STRINGTABLE:
                     print '  STRINGTABLE'
                     fmt = '{0}s'.format(subsection_len)
                     table, = struct.unpack_from(fmt, data, section_header.ptr_to_raw_data + pointer)
@@ -314,8 +309,7 @@ def dump_sections(data, section_headers):
                     print table
                     print strs
                     print hex(i)
-
-                if subsection_type == DEBUG_S_FILECHKSMS:
+                elif subsection_type == DEBUG_S_FILECHKSMS:
                     print '  FILECHKSMS'
                     ibSym = pointer
                     left = subsection_len
@@ -326,6 +320,8 @@ def dump_sections(data, section_headers):
                         print '     oFFSET: {0}'.format(hex(offset))
                         ibSym += 24
                         left -= 24
+                else:
+                    print '  UNKNOWN'
 
                 pointer = pointer + subsection_len
 
