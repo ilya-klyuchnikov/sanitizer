@@ -245,7 +245,8 @@ class DebugSection(object):
         self.subsections = subsections
 
     def dump(self):
-        pass
+        for subsection in self.subsections:
+            subsection.dump()
 
 class DebugSubsection(object):
     pass
@@ -255,24 +256,55 @@ class DebugGenericSubsection(DebugSubsection):
     def __init__(self, subsection_data):
         self.subsection_data = subsection_data
 
+    def dump(self):
+        pass
+
 
 class DebugSymbolsSubsection(DebugSubsection):
     def __init__(self, symbols):
         self.symbols = symbols
+
+    def dump(self):
+        for symbol in self.symbols:
+            symbol.dump()
 
 
 class DebugFramedataSubsection(DebugSubsection):
     def __init__(self, subsection_data):
         self.subsection_data = subsection_data
 
+    def dump(self):
+        print '  FRAMEDATA'
+        # the size of data - 32
+        ppointer, = struct.unpack_from('<I', self.subsection_data, 8 + 4 + 5 * 4)
+        print '    pointer: {0}'.format(hex(ppointer))
+
 
 class DebugStringTableSubsection(DebugSubsection):
     def __init__(self, subsection_data):
         self.subsection_data = subsection_data
 
+    def dump(self):
+        print '  STRINGTABLE'
+        table = self.subsection_data[8:]
+        strs = table.split('\0')
+        print strs
+
+
 class DebugFileChkSumSubsection(DebugSubsection):
     def __init__(self, subsection_data):
         self.subsection_data = subsection_data
+
+    def dump(self):
+        ibSym = 8
+        left = len(self.subsection_data) - 8
+        print '  FILECHKSMS'
+        while left > 0:
+            my_data = self.subsection_data[ibSym:ibSym + 24]
+            offset, = struct.unpack_from('<I', my_data, 0)
+            print '     oFFSET: {0}'.format(hex(offset))
+            ibSym += 24
+            left -= 24
 
 
 class Symbol(object):
@@ -283,20 +315,35 @@ class ObjNameSymbol(Symbol):
     def __init__(self, subsection_data):
         self.subsection_data = subsection_data
 
+    def dump(self):
+        reclen, = struct.unpack_from('<H', self.subsection_data, 0)  # 2
+        type, = struct.unpack_from('<H', self.subsection_data, 2)  # 2
+        type_len = 2
+        signature = struct.unpack_from('<I', self.subsection_data, 4)
+        signature_len = 4
+        slen = reclen - signature_len - type_len  # (type, signature)
+        fmt = '{0}s'.format(slen)
+        name, = struct.unpack_from(fmt, self.subsection_data, 8)
+        # null terminated
+        print '    S_OBJNAME: {0}'.format(name)
+
 
 class BuildInfoSymbol(Symbol):
     def __init__(self, subsection_data):
         self.subsection_data = subsection_data
 
-
-class StringTableSymbol(Symbol):
-    def __init__(self, subsection_data):
-        self.subsection_data = subsection_data
+    def dump(self):
+        reclen, = struct.unpack_from('<H', self.subsection_data, 0)  # 2
+        id, = struct.unpack_from('<I', self.subsection_data, 4)
+        print '    S_BUILDINFO: {0}'.format(hex(id))
 
 
 class GenericSymbol(Symbol):
     def __init__(self, subsection_data):
         self.subsection_data = subsection_data
+
+    def dump(self):
+        pass
 
 
 class TypesSection(object):
@@ -351,18 +398,18 @@ class SubstringLeaf(Leaf):
         self.data = data
 
     def dump(self, id):
-        count, = struct.unpack_from('<I', self.data, 4)  # 2
+        count, = struct.unpack_from('<I', self.data, 4)  # 4
         print '   --------'
         print '   {0}'.format(hex(id))
         print '             |LF_SUBSTR_LIST: count:{0}'.format(count)
         # references
         for i in range(0, count):
-            ref, = struct.unpack_from('<I', self.data, 6 + i * 4)
+            ref, = struct.unpack_from('<I', self.data, 8 + i * 4)
             print '             |LF_SUBSTR_LIST: ref:{0}'.format(hex(ref))
+
 
 def dump_section(data, section_header):
     if section_header.name == '.debug$S':
-        print '.debug$S'
         sig, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data)
         assert sig == 4
         pointer = 4
@@ -390,7 +437,6 @@ def dump_section(data, section_header):
             assert subsection_len != 0
 
             if subsection_type == DEBUG_S_SYMBOLS:
-                print '  SYMBOLS'
                 ibSym = 8
                 left = subsection_len
                 to_change_this = False
@@ -403,7 +449,6 @@ def dump_section(data, section_header):
                     type_len = 2
 
                     symbol = None
-                    # print '    ibsym: {0}'.format(hex(ibSym))
                     if type == S_OBJNAME:
                         to_change_this = True
                         to_change = True
@@ -413,11 +458,11 @@ def dump_section(data, section_header):
                         fmt = '{0}s'.format(slen)
                         name, = struct.unpack_from(fmt, symbolData, 8)
                         # null terminated
-                        print '    S_OBJNAME: {0}'.format(name)
+                        #print '    S_OBJNAME: {0}'.format(name)
                         symbol = ObjNameSymbol(symbolData)
                     elif type == S_BUILDINFO:
                         id, = struct.unpack_from('<I', symbolData, 4)
-                        print '    S_BUILDINFO: {0}'.format(hex(id))
+                        #print '    S_BUILDINFO: {0}'.format(hex(id))
                         to_change_this = True
                         to_change = True
                         symbol = BuildInfoSymbol(symbolData)
@@ -435,37 +480,22 @@ def dump_section(data, section_header):
                 # easy
                 ibSym = 8
                 assert subsection_len == 36
-                print '  FRAMEDATA'
-                rva = struct.unpack_from('<I', subsection, ibSym)
 
                 # TODO reading in cycle
-                # the size of data - 32
-                ppointer, = struct.unpack_from('<I', subsection, ibSym + 4 + 5 * 4)
-                print '    pointer: {0}'.format(hex(ppointer))
                 to_change = True
                 subsections.append(DebugFramedataSubsection(subsection))
             elif subsection_type == DEBUG_S_STRINGTABLE:
                 ibSym = 8
-                print '  STRINGTABLE'
-                fmt = '{0}s'.format(subsection_len)
-                table, = struct.unpack_from(fmt, subsection, ibSym)
-                strs = table.split('\0')
-                table2 = '\0'.join(strs)
-                i = table.find('$T0 $ebp')
-                assert table == table2
-                print table
-                print strs
-                print hex(i)
                 to_change = True
                 subsections.append(DebugStringTableSubsection(subsection))
             elif subsection_type == DEBUG_S_FILECHKSMS:
-                print '  FILECHKSMS'
+                #print '  FILECHKSMS'
                 ibSym = 8
                 left = subsection_len
                 while left > 0:
                     my_data = subsection[ibSym:ibSym + 24]
                     offset, = struct.unpack_from('<I', my_data, 0)
-                    print '     oFFSET: {0}'.format(hex(offset))
+                    #print '     oFFSET: {0}'.format(hex(offset))
                     ibSym += 24
                     left -= 24
                 to_change = True
@@ -481,7 +511,6 @@ def dump_section(data, section_header):
             return None
 
     elif section_header.name == '.debug$T':
-        print '.debug$T'
         sig, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data)
 
         assert sig == 4
@@ -496,12 +525,12 @@ def dump_section(data, section_header):
             # the length of s_data
             s_len, = struct.unpack_from('<H', data, section_header.ptr_to_raw_data + pointer)
             piece = data[section_header.ptr_to_raw_data + pointer: section_header.ptr_to_raw_data + pointer + s_len + 2]
-            print '             {0} slen: {1}'.format(hex(index), s_len)
+            #print '             {0} slen: {1}'.format(hex(index), s_len)
             pointer += 2  # s_len
             leaf, = struct.unpack_from('<H', data, section_header.ptr_to_raw_data + pointer)
 
-            print '             |leaf:{0}'.format(hex(leaf))
-            print '             |{0}'.format(':'.join(x.encode('hex') for x in piece))
+            #print '             |leaf:{0}'.format(hex(leaf))
+            #print '             |{0}'.format(':'.join(x.encode('hex') for x in piece))
             # print '             |{0}'.format(s_data)
             if leaf == LF_STRING_ID:
                 leaves.append(StringLeaf(piece))
@@ -528,6 +557,7 @@ def dump(input_file):
     section_headers = read_section_headers(data, header.number_of_sections)
     results = dump_sections(data, section_headers)
     for header, result in results:
+        print '>>>>> {0}'.format(header.name)
         result.dump()
 
 
