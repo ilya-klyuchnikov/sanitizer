@@ -262,6 +262,7 @@ def dump_sections(data, section_headers):
                 if subsection_len == 0:
                     subsection_len = section_header.size_of_raw_data - pointer
                 # printing debug symbols
+
                 if subsection_type == DEBUG_S_SYMBOLS:
                     print '  SYMBOLS'
                     ibSym = pointer
@@ -269,6 +270,9 @@ def dump_sections(data, section_headers):
                     while left > 0:
 
                         reclen, = struct.unpack_from('<H', data, section_header.ptr_to_raw_data + ibSym)
+                        # including reclen
+                        piece = data[section_header.ptr_to_raw_data + ibSym: section_header.ptr_to_raw_data + ibSym + reclen + 2]
+
                         type, = struct.unpack_from('<H', data, section_header.ptr_to_raw_data + ibSym + 2)
 
                         # print '    ibsym: {0}'.format(hex(ibSym))
@@ -286,7 +290,7 @@ def dump_sections(data, section_headers):
                             # print '    UNKNOWN SYMBOL'
                             pass
 
-                        ibSym += 2 + reclen
+                        ibSym += 2 + reclen #type
                         left -= (2 + reclen)
 
                 if subsection_type == DEBUG_S_FRAMEDATA:
@@ -340,34 +344,32 @@ def dump_sections(data, section_headers):
                 assert (pointer % 4) == 0
                 # the length of s_data
                 s_len, = struct.unpack_from('<H', data, section_header.ptr_to_raw_data + pointer)
+                piece = data[section_header.ptr_to_raw_data + pointer: section_header.ptr_to_raw_data + pointer + s_len + 2]
                 print '             {0} slen: {1}'.format(hex(index), s_len)
                 pointer += 2 # s_len
                 leaf, = struct.unpack_from('<H', data, section_header.ptr_to_raw_data + pointer)
 
                 print '             |leaf:{0}'.format(hex(leaf))
-                # d_data is correct
-                d_data = data[section_header.ptr_to_raw_data + pointer: section_header.ptr_to_raw_data + pointer + s_len]
-                print '             |{0}'.format(':'.join(x.encode('hex') for x in d_data))
+                print '             |{0}'.format(':'.join(x.encode('hex') for x in piece))
                 # print '             |{0}'.format(s_data)
                 if leaf == LF_STRING_ID:
-                    ref, = struct.unpack_from('<H', d_data, 2)
-                    # print '             |{0}'.format((s_data,))
+                    ref, = struct.unpack_from('<H', piece, 4)
                     print '             |ref:{0}'.format(hex(ref))
 
                 if leaf == LF_BUILDINFO:
-                    count, = struct.unpack_from('<H', d_data, 2) #2
+                    count, = struct.unpack_from('<H', piece, 4) #2
                     print '             |LF_BUILDINFO: count:{0}'.format(count)
                     # references
                     for i in range(0, count):
-                        ref, = struct.unpack_from('<I', d_data, 4 + i*4)
+                        ref, = struct.unpack_from('<I', piece, 6 + i*4)
                         print '             |LF_BUILDINFO: ref:{0}'.format(hex(ref))
 
                 if leaf == LF_SUBSTR_LIST:
-                    count, = struct.unpack_from('<I', d_data, 2)  # 2
+                    count, = struct.unpack_from('<I', piece, 4)  # 2
                     print '             |LF_SUBSTR_LIST: count:{0}'.format(count)
                     # references
                     for i in range(0, count):
-                        ref, = struct.unpack_from('<I', d_data, 4 + i * 4)
+                        ref, = struct.unpack_from('<I', piece, 6 + i * 4)
                         print '             |LF_SUBSTR_LIST: ref:{0}'.format(hex(ref))
 
                 pointer += s_len
