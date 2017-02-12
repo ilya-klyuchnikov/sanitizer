@@ -621,6 +621,8 @@ def dump_section(data, section_header):
                         name, = struct.unpack_from(fmt, symbolData, 8)
                         # null terminated
                         #print '    S_OBJNAME: {0}'.format(name)
+                        # includes reclen
+                        # TODO - remove reclen, remove type - directly in constructor
                         symbol = ObjNameSymbol(symbolData)
                     elif type == S_BUILDINFO:
                         id, = struct.unpack_from('<I', symbolData, 4)
