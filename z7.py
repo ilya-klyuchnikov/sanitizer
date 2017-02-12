@@ -269,8 +269,8 @@ class DebugGenericSubsection(DebugSubsection):
         pass
 
     def patched_result(self, data_output):
-        #data_output.fromstring(struct.pack('<I', self.subsection_type))
-        #data_output.fromstring(struct.pack('<I', self.subsection_len))
+        data_output.fromstring(struct.pack('<I', self.subsection_type))
+        data_output.fromstring(struct.pack('<I', self.subsection_len))
         data_output.fromstring(self.subsection_data)
 
 
@@ -315,8 +315,8 @@ class DebugFramedataSubsection(DebugSubsection):
     def patched_result(self, data_output):
         # data_output.fromstring(struct.pack('<I', DEBUG_S_FRAMEDATA))
         # data_output.fromstring(struct.pack('<I', 100))
-        #data_output.fromstring(struct.pack('<I', self.subsection_type))
-        #data_output.fromstring(struct.pack('<I', self.subsection_len))
+        data_output.fromstring(struct.pack('<I', self.subsection_type))
+        data_output.fromstring(struct.pack('<I', self.subsection_len))
         data_output.fromstring(self.subsection_data)
 
 
@@ -380,8 +380,8 @@ class DebugStringTableSubsection(DebugSubsection):
     def patched_result(self, data_output):
         # data_output.fromstring(struct.pack('<I', DEBUG_S_STRINGTABLE))
         # data_output.fromstring(struct.pack('<I', 100))
-        #data_output.fromstring(struct.pack('<I', self.subsection_type))
-        #data_output.fromstring(struct.pack('<I', self.subsection_len))
+        data_output.fromstring(struct.pack('<I', self.subsection_type))
+        data_output.fromstring(struct.pack('<I', self.subsection_len))
         data_output.fromstring(self.subsection_data)
 
 
@@ -408,8 +408,8 @@ class DebugFileChkSumSubsection(DebugSubsection):
     def patched_result(self, data_output):
         # data_output.fromstring(struct.pack('<I', DEBUG_S_FILECHKSMS))
         # data_output.fromstring(struct.pack('<I', 100))
-        #data_output.fromstring(struct.pack('<I', self.subsection_type))
-        #data_output.fromstring(struct.pack('<I', self.subsection_len))
+        data_output.fromstring(struct.pack('<I', self.subsection_type))
+        data_output.fromstring(struct.pack('<I', self.subsection_len))
         data_output.fromstring(self.subsection_data)
 
 
@@ -638,7 +638,7 @@ def dump_section(data, section_header):
                     subsections.append(DebugSymbolsSubsection(subsection_type, subsection_len, symbols))
                 else:
                     print "OTHER: {0}".format(hex(xxx_start))
-                    subsections.append(DebugGenericSubsection(subsection_type, subsection_len, subsection))
+                    subsections.append(DebugGenericSubsection(subsection_type, subsection_len, subsection[8:]))
 
             elif subsection_type == DEBUG_S_FRAMEDATA:
                 print "DEBUG_S_FRAMEDATA: {0}".format(hex(xxx_start))
@@ -648,12 +648,12 @@ def dump_section(data, section_header):
 
                 # TODO reading in cycle
                 to_change = True
-                subsections.append(DebugFramedataSubsection(subsection_type, subsection_len, subsection))
+                subsections.append(DebugFramedataSubsection(subsection_type, subsection_len, subsection[8:]))
             elif subsection_type == DEBUG_S_STRINGTABLE:
                 print "DEBUG_S_STRINGTABLE: {0}".format(hex(xxx_start))
                 ibSym = 8
                 to_change = True
-                subsections.append(DebugStringTableSubsection(subsection_type, subsection_len, subsection))
+                subsections.append(DebugStringTableSubsection(subsection_type, subsection_len, subsection[8:]))
             elif subsection_type == DEBUG_S_FILECHKSMS:
                 print "DEBUG_S_FILECHKSMS: {0}".format(hex(xxx_start))
                 #print '  FILECHKSMS'
@@ -666,10 +666,10 @@ def dump_section(data, section_header):
                     ibSym += 24
                     left -= 24
                 to_change = True
-                subsections.append(DebugFileChkSumSubsection(subsection_type, subsection_len, subsection))
+                subsections.append(DebugFileChkSumSubsection(subsection_type, subsection_len, subsection[8:]))
             else:
                 print "OTHER: {0}".format(hex(xxx_start))
-                subsections.append(DebugGenericSubsection(subsection_type, subsection_len, subsection))
+                subsections.append(DebugGenericSubsection(subsection_type, subsection_len, subsection[8:]))
 
             pointer = pointer + subsection_len
 
@@ -795,8 +795,6 @@ def dump(input_file, out_file):
     for result in results:
         if result:
             result.patch()
-
-
 
 
     header.write(output)
