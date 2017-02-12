@@ -231,15 +231,6 @@ LF_BUILDINFO     = 0x1603
 LF_SUBSTR_LIST   = 0x1604
 LF_STRING_ID     = 0x1605
 
-# returns pairs (section_header, data) - where data to modify
-def dump_sections(data, section_headers):
-    section_results = []
-    for section_header in section_headers:
-        section_result = dump_section(data, section_header)
-        if section_result:
-            section_results.append((section_header, section_result))
-    return section_results
-
 class DebugSection(object):
     def __init__(self, subsections):
         self.subsections = subsections
@@ -248,9 +239,9 @@ class DebugSection(object):
         for subsection in self.subsections:
             subsection.dump()
 
-    def patch(self):
+    def patch(self, s1, s2):
         for subsection in self.subsections:
-            subsection.patch()
+            subsection.patch(s1, s2)
 
 class DebugSubsection(object):
     pass
@@ -263,7 +254,7 @@ class DebugGenericSubsection(DebugSubsection):
     def dump(self):
         pass
 
-    def patch(self):
+    def patch(self, s1, s2):
         pass
 
 
@@ -275,8 +266,9 @@ class DebugSymbolsSubsection(DebugSubsection):
         for symbol in self.symbols:
             symbol.dump()
 
-    def patch(self):
-        pass
+    def patch(self, s1, s2):
+        for symbol in self.symbols:
+            symbol.patch(s1, s2)
 
 
 class DebugFramedataSubsection(DebugSubsection):
@@ -289,7 +281,7 @@ class DebugFramedataSubsection(DebugSubsection):
         ppointer, = struct.unpack_from('<I', self.subsection_data, 8 + 4 + 5 * 4)
         print '    pointer: {0}'.format(hex(ppointer))
 
-    def patch(self):
+    def patch(self, s1, s2):
         pass
 
 
@@ -303,8 +295,48 @@ class DebugStringTableSubsection(DebugSubsection):
         strs = table.split('\0')
         print strs
 
-    def patch(self):
-        pass
+    def patch(self, s1, s2):
+        table = self.subsection_data[8:]
+        delims = []
+        strings = []
+        delim = table.find('\0')
+        delims.append(delim)
+        print hex(delim)
+        s = table[0:delim + 1]
+        print s
+        strings.append(s)
+        while True:
+            next_delim = table.find('\0', delim + 1)
+            if next_delim == -1:
+                break
+            delims.append(delim + 1)
+            print hex(delim + 1)
+            s = table[delim + 1: next_delim + 1]
+            strings.append(s)
+            print s
+            delim = next_delim
+
+        ss1 = []
+        s11 = s1.lower()
+        s21 = s2.lower()
+        ss1 = [x.replace(s11, s21) for x in strings]
+
+        next_indices = [0]
+        inx = 0
+        for i in range(0, len(ss1) - 1):
+            inx += len(ss1[i])
+            next_indices.append(inx)
+
+        for n in next_indices:
+            print(hex(n))
+
+        subst = {}
+        for i in range(0, len(ss1)):
+            subst[delims[i]] = next_indices[i]
+            print '{0} -> {1}'.format(hex(delims[i]), hex(next_indices[i]))
+
+        #print subst
+
 
 
 class DebugFileChkSumSubsection(DebugSubsection):
@@ -322,7 +354,7 @@ class DebugFileChkSumSubsection(DebugSubsection):
             ibSym += 24
             left -= 24
 
-    def patch(self):
+    def patch(self, s1, s2):
         pass
 
 
@@ -341,12 +373,17 @@ class ObjNameSymbol(Symbol):
         signature = struct.unpack_from('<I', self.subsection_data, 4)
         signature_len = 4
         slen = reclen - signature_len - type_len  # (type, signature)
+        slen_len = 2
         fmt = '{0}s'.format(slen)
         name, = struct.unpack_from(fmt, self.subsection_data, 8)
         # null terminated
         print '    S_OBJNAME: {0}'.format(name)
 
-    def patch(self):
+
+    def patch(self, s1, s2):
+        name = self.subsection_data[8:]
+        result = name.replace(s1, s2)
+        print "   S_OBJNAME: {0} -> {1}".format(name, result)
         pass
 
 
@@ -359,7 +396,7 @@ class BuildInfoSymbol(Symbol):
         id, = struct.unpack_from('<I', self.subsection_data, 4)
         print '    S_BUILDINFO: {0}'.format(hex(id))
 
-    def patch(self):
+    def patch(self, s1, s2):
         pass
 
 
@@ -370,7 +407,7 @@ class GenericSymbol(Symbol):
     def dump(self):
         pass
 
-    def patch(self):
+    def patch(self, s1, s2):
         pass
 
 
@@ -384,7 +421,7 @@ class TypesSection(object):
             leaf.dump(i)
             i += 1
 
-    def patch(self):
+    def patch(self, s1, s2):
         pass
 
 class Leaf(object):
@@ -437,6 +474,15 @@ class SubstringLeaf(Leaf):
         for i in range(0, count):
             ref, = struct.unpack_from('<I', self.data, 8 + i * 4)
             print '             |LF_SUBSTR_LIST: ref:{0}'.format(hex(ref))
+
+# returns pairs (section_header, data) - where data to modify
+def dump_sections(data, section_headers):
+    section_results = []
+    for section_header in section_headers:
+        section_result = dump_section(data, section_header)
+        if section_result:
+            section_results.append((section_header, section_result))
+    return section_results
 
 
 def dump_section(data, section_header):
@@ -580,7 +626,7 @@ def dump_section(data, section_header):
     return None
 
 
-def dump(input_file):
+def dump(input_file, s1, s2):
     with open(input_file, 'rb') as ifile:
         data = ifile.read()
 
@@ -592,8 +638,11 @@ def dump(input_file):
         result.dump()
 
     for header, result in results:
-        print '>>>>> {0}'.format(header.name)
-        result.patch()
+        result.patch(s1, s2)
+
+    # stage1: patching debug$S section
+    # 1) S_OBJNAME
+    # 2) string table
 
 
-dump('experiments/01/01.obj')
+dump('experiments/01/01.obj', 'Y:\\experiments\\01', 'Y:\\buck\\build')
