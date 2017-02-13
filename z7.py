@@ -552,6 +552,10 @@ class TypesSection(object):
         data_output.fromstring(struct.pack('<I', 4))
         for leaf in self.leaves[:self.build_info.offset]:
             leaf.patched_result(data_output)
+        self.build_info.serialize()
+        for leaf in self.build_info.symbols:
+            leaf.patched_result(data_output)
+
 
     def mkBuildInfo(self):
         build_info_leaf = self.leaves[-1]
@@ -611,13 +615,13 @@ class BuildInfo(object):
         refs[1] = self.store_strings(build_tool_strings)
 
         args_strings = self.split(self.args)
-        refs[2] = self.store_strings(args_strings)
+        refs[4] = self.store_strings(args_strings)
 
         source_file_strings = self.split(self.source_file)
-        refs[3] = self.store_strings(source_file_strings)
+        refs[2] = self.store_strings(source_file_strings)
 
         pdb_strings = self.split(self.pdb)
-        refs[4] = self.store_strings(pdb_strings)
+        refs[3] = self.store_strings(pdb_strings)
 
         leaf = BuildInfoLeafEx(refs)
         self.symbols.append(leaf)
@@ -654,9 +658,9 @@ class BuildInfo(object):
         else:
             space_i = s.rfind(' ', MIN_LEN, MAX_LEN)
             if space_i != -1:
-                return s[:space_i] + self.split(s[space_i:])
+                return [s[:space_i]] + self.split(s[space_i:])
             else:
-                return s[:MAX_LEN] + self.split(s[MAX_LEN:])
+                return [s[:MAX_LEN]] + self.split(s[MAX_LEN:])
 
 
 class Leaf(object):
@@ -720,12 +724,13 @@ class BuildInfoLeafEx(Leaf):
             print '             |LF_BUILDINFO: ref:{0}'.format(hex(ref))
 
     def patched_result(self, data_output):
-        lennn = 6 + len(self.refs) * 4  # len(2), type(2), size(2), len*data(4)
-        data_output.fromstring(struct.pack('<H'), lennn)
-        data_output.fromstring(struct.pack('<H'), LF_BUILDINFO)
-        data_output.fromstring(struct.pack('<H'), len(self.refs))
+        lennn = 6 + len(self.refs) * 4  # type(2), size(2), len*data(4)
+        data_output.fromstring(struct.pack('<H', lennn))
+        data_output.fromstring(struct.pack('<H', LF_BUILDINFO))
+        data_output.fromstring(struct.pack('<H', len(self.refs)))
         for ref in self.refs:
-            data_output.fromstring(struct.pack('<I'), ref)
+            data_output.fromstring(struct.pack('<I', ref))
+        data_output.fromstring('\xf2\xf1')
 
 
 class StringLeaf(Leaf):
@@ -821,8 +826,8 @@ class StringLeafEx(Leaf):
 
         # len, type, ref
         data_output.fromstring(struct.pack('<H', len(result) + 6))
-        data_output.fromstring(struct.pack('<H'), LF_STRING_ID)
-        data_output.fromstring(struct.pack('<I'), self.ref)
+        data_output.fromstring(struct.pack('<H', LF_STRING_ID))
+        data_output.fromstring(struct.pack('<I', self.ref))
         data_output.fromstring(result)
 
 
@@ -867,12 +872,12 @@ class SubstringLeafEx(Leaf):
             print '             |LF_SUBSTR_LIST: ref:{0}'.format(hex(ref))
 
     def patched_result(self, data_output):
-        lennn = 8 + len(self.refs) * 4 # len(2), type(2), size(4), len*data(4)
-        data_output.fromstring(struct.pack('<H'), lennn)
-        data_output.fromstring(struct.pack('<H'), LF_SUBSTR_LIST)
-        data_output.fromstring(struct.pack('<I'), len(self.refs))
+        lennn = 6 + len(self.refs) * 4 # type(2), size(4), len*data(4)
+        data_output.fromstring(struct.pack('<H', lennn))
+        data_output.fromstring(struct.pack('<H', LF_SUBSTR_LIST))
+        data_output.fromstring(struct.pack('<I', len(self.refs)))
         for ref in self.refs:
-            data_output.fromstring(struct.pack('<I'), ref)
+            data_output.fromstring(struct.pack('<I', ref))
 
 
 # returns pairs (section_header, data) - where data to modify
