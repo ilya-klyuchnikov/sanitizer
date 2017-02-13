@@ -392,8 +392,8 @@ class DebugFileChkSumSubsection(DebugSubsection):
         self.subsection_data = subsection_data
 
     def dump(self):
-        ibSym = 8
-        left = len(self.subsection_data) - 8
+        ibSym = 0
+        left = len(self.subsection_data)
         print '  FILECHKSMS'
         while left > 0:
             my_data = self.subsection_data[ibSym:ibSym + 24]
@@ -579,21 +579,24 @@ def dump_section(data, section_header):
 
             if (pointer % 4) != 0:
                 padding = 4 - (pointer % 4)
-                pad = data[section_header.ptr_to_raw_data + pointer: section_header.ptr_to_raw_data + pointer + padding]
                 pointer += padding
             if pointer == section_header.size_of_raw_data:
                 break
 
             subsection_start = pointer
             subsection_type, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data + pointer)
-            pointer += 4
+            subsection_type_len = 4
+            pointer += subsection_type_len
 
             subsection_len, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data + pointer)
-            pointer += 4
+            subsection_len_len = 4
+            pointer += subsection_len_len
+
+            prefix_len = subsection_type_len + subsection_len_len
 
             # subsection includes type and len!!
             subsection = data[
-                         section_header.ptr_to_raw_data + subsection_start: section_header.ptr_to_raw_data + subsection_start + subsection_len + 8]
+                         section_header.ptr_to_raw_data + subsection_start : section_header.ptr_to_raw_data + subsection_start + subsection_len + 8]
 
             assert subsection_len != 0
 
@@ -640,7 +643,7 @@ def dump_section(data, section_header):
                     subsections.append(DebugSymbolsSubsection(subsection_type, subsection_len, symbols))
                 else:
                     print "OTHER: {0}".format(hex(xxx_start))
-                    subsections.append(DebugGenericSubsection(subsection_type, subsection_len, subsection[8:]))
+                    subsections.append(DebugGenericSubsection(subsection_type, subsection_len, subsection[prefix_len:]))
 
             elif subsection_type == DEBUG_S_FRAMEDATA:
                 print "DEBUG_S_FRAMEDATA: {0}".format(hex(xxx_start))
@@ -650,15 +653,14 @@ def dump_section(data, section_header):
 
                 # TODO reading in cycle
                 to_change = True
-                subsections.append(DebugFramedataSubsection(subsection_type, subsection_len, subsection[8:]))
+                subsections.append(DebugFramedataSubsection(subsection_type, subsection_len, subsection[prefix_len:]))
             elif subsection_type == DEBUG_S_STRINGTABLE:
                 print "DEBUG_S_STRINGTABLE: {0}".format(hex(xxx_start))
                 ibSym = 8
                 to_change = True
-                subsections.append(DebugStringTableSubsection(subsection_type, subsection_len, subsection[8:]))
+                subsections.append(DebugStringTableSubsection(subsection_type, subsection_len, subsection[prefix_len:]))
             elif subsection_type == DEBUG_S_FILECHKSMS:
                 print "DEBUG_S_FILECHKSMS: {0}".format(hex(xxx_start))
-                #print '  FILECHKSMS'
                 ibSym = 8
                 left = subsection_len
                 while left > 0:
@@ -791,7 +793,7 @@ def dump(input_file, out_file):
     results = dump_sections(data, section_headers)
     for result in results:
         if result:
-            #result.dump()
+            result.dump()
             pass
 
     for result in results:
