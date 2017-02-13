@@ -313,7 +313,7 @@ class DebugFramedataSubsection(DebugSubsection):
     def dump(self):
         print '  FRAMEDATA'
         # the size of data - 32
-        ppointer, = struct.unpack_from('<I', self.subsection_data, 8 + 4 + 5 * 4)
+        ppointer, = struct.unpack_from('<I', self.subsection_data,  24)
         print '    pointer: {0}'.format(hex(ppointer))
 
     def patch(self):
@@ -324,7 +324,14 @@ class DebugFramedataSubsection(DebugSubsection):
         # data_output.fromstring(struct.pack('<I', 100))
         data_output.fromstring(struct.pack('<I', self.subsection_type))
         data_output.fromstring(struct.pack('<I', self.subsection_len))
-        data_output.fromstring(self.subsection_data)
+        assert self.subsection_len == 32 + 4
+        data_output.fromstring(self.subsection_data[:24])
+        ppointer, = struct.unpack_from('<I', self.subsection_data, 24)
+        if ppointer in mapping:
+            ppointer = mapping[ppointer]
+        data_output.fromstring(struct.pack('<I', ppointer))
+        data_output.fromstring(self.subsection_data[28:])
+
 
 
 class DebugStringTableSubsection(DebugSubsection):
