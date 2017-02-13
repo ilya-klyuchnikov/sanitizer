@@ -559,16 +559,32 @@ class StringLeaf(Leaf):
         print '   {0}'.format(hex(id))
         print '   LF_STRING_ID'
         print '             |substringref:{0}'.format(hex(ref))
-        print '             |s:{0}'.format(s)
+        print '             |s:{0}'.format((s,))
 
     def patched_result(self, data_output):
-        result = self.data
+        prefix = self.data[0:8]
+        s = self.data[8:]
+
+        result = s
+        end = s.find('\x00')
+        if end != -1:
+            result = result[0:end + 1]
+
         if result.find(s1) != -1:
             result = result.replace(s1, s2)
 
         if result.find(s11) != -1:
             result = result.replace(s11, s21)
+
+        ln = len(result)
+        if (ln % 4) != 0:
+            padding = 4 - (ln % 4)
+            delta = '\xf3\xf2\xf1'[-padding:]
+            result += delta
+
+        data_output.fromstring(prefix)
         data_output.fromstring(result)
+
 
 
 class SubstringLeaf(Leaf):
