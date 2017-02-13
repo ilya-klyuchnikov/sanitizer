@@ -874,19 +874,28 @@ def write_section_headers(output, sections):
         section.write(output)
 
 
-def write_symbol_table(output, data, pointer_to_symbol_table, number_of_symbols, sections_headers):
+def write_symbol_table(output, data, pointer_to_symbol_table, number_of_symbols, sections_headers, results):
     aux_symbols = 0
-    removing_symbol = False
+    change_next = False
+    section = None
     for i in range(0, number_of_symbols):
         start = pointer_to_symbol_table + SYMBOL_SIZE * i
         symbol = data[start: start + SYMBOL_SIZE]
         if aux_symbols == 0:
             aux_symbols, = struct.unpack_from(AUX_SYMBOLS_FORMAT, symbol, AUX_SYMBOLS_OFFSET)
+            section, = struct.unpack_from(SECTION_SYMBOL_FORMAT, symbol, SECTION_SYMBOL_OFFSET)
             output.fromstring(symbol)
+            if section > 0 and section <= len(sections_headers):
+                if (results[section-1]):
+                    change_next = True
+                    if aux_symbols != 1:
+                        assert False
         else:
             aux_symbols -= 1
-            if removing_symbol:
-                output.fromstring(str(bytearray(SYMBOL_SIZE)))
+            if change_next:
+                output.fromstring(struct.pack('<I', sections_headers[section - 1].size_of_raw_data))
+                output.fromstring(symbol[4:])
+                change_next = False
             else:
                 output.fromstring(symbol)
 
@@ -901,7 +910,7 @@ def dump(input_file, out_file):
     header = FileHeader(data)
     old_pointer_to_symbol_table = header.pointer_to_symbol_table
     section_headers = read_section_headers(data, header.number_of_sections)
-    to_copy_string_section = header.pointer_to_symbol_table + SYMBOL_SIZE * header.number_of_symbols, len(data)
+    to_copy_string_section = header.pointer_to_symbol_table + (SYMBOL_SIZE * header.number_of_symbols), len(data)
 
     results = dump_sections(data, section_headers)
     for result in results:
@@ -926,18 +935,28 @@ def dump(input_file, out_file):
     #     header.number_of_symbols,
     #     section_headers)
 
+
+
+
+
+    startX, endX = to_copy_string_section
+    #data_output.fromstring(data[old_pointer_to_symbol_table:start])
+    new_pointer_to_symbol_table = SECTION_HEADERS_START + SECTION_HEADER_SIZE*header.number_of_sections + len(data_output)
+
+    header.pointer_to_symbol_table = new_pointer_to_symbol_table
+    write_symbol_table(data_output, data, old_pointer_to_symbol_table, header.number_of_symbols, section_headers, results)
+    data_output.fromstring(data[startX:endX])
+
     header.write(output)
     write_section_headers(
         output,
         section_headers)
 
-    start, end = to_copy_string_section
-    data_output.fromstring(data[old_pointer_to_symbol_table:start])
-    data_output.fromstring(data[start:end])
-
     total_output = output + data_output
     with open(out_file, 'wb') as ofile:
         total_output.tofile(ofile)
+
+    print "TOCOPY: {0},{1}".format(hex(startX), hex(endX))
 
 mapping = {}
 s1 = 'Y:\\experiments\\yyyyyyyyyyyyyyyyyy'
