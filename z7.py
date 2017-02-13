@@ -565,8 +565,13 @@ class StringLeaf(Leaf):
         prefix = self.data[0:8]
         s = self.data[8:]
 
+        # s_len, typ
+
         result = s
         end = s.find('\x00')
+
+        sub_output = array.array('b')
+        sub_output.fromstring(result)
         if end != -1:
             result = result[0:end + 1]
 
@@ -582,7 +587,10 @@ class StringLeaf(Leaf):
             delta = '\xf3\xf2\xf1'[-padding:]
             result += delta
 
-        data_output.fromstring(prefix)
+        #data_output.fromstring(prefix)
+        data_output.fromstring(prefix[0:2]) # type
+        data_output.fromstring(struct.pack('<H', len(result)))
+        data_output.fromstring(prefix[4:8]) #red
         data_output.fromstring(result)
 
 
@@ -875,10 +883,11 @@ def dump(input_file, out_file):
         total_output.tofile(ofile)
 
 mapping = {}
-s1 = 'Y:\\Rxperiments'
-s2 = 'Y:\\Zxpiriments'
+s1 = 'Y:\\experiments\\yyyyyyyyyyyyyyyyyy'
+s2 = 'Y:\\experiments\\xxx'
 s11 = s1.lower()
 s21 = s2.lower()
 
-dump('experiments/short.obj', 'experiments/short-1.obj')
+# Y:\experiments\yyyyyyyyyyyyyyyyyy -> Y:\experiments\xxx
+dump('experiments/yyyyyyyyyyyyyyyyyy/out.obj', 'experiments/xxx/out-1.obj')
 print mapping
