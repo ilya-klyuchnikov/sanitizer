@@ -276,6 +276,7 @@ class DebugGenericSubsection(DebugSubsection):
         data_output.fromstring(struct.pack('<I', self.subsection_len))
         data_output.fromstring(self.subsection_data)
 
+RELOCATION_SHIFT = [False, 0, True]
 
 class DebugSymbolsSubsection(DebugSubsection):
     def __init__(self, subsection_type, subsection_len, symbols):
@@ -300,7 +301,23 @@ class DebugSymbolsSubsection(DebugSubsection):
         for symbol in self.symbols:
             symbol.patched_result(sub_output)
 
-        data_output.fromstring(struct.pack('<I', len(sub_output)))
+        old_subsec_len = self.subsection_len
+        new_subsec_len = len(sub_output)
+        data_output.fromstring(struct.pack('<I', new_subsec_len))
+
+        if (new_subsec_len % 4) != 0:
+            padding1 = 4 - (new_subsec_len % 4)
+            new_subsec_len += padding1
+
+        if (old_subsec_len % 4) != 0:
+            padding2 = 4 - (old_subsec_len % 4)
+            old_subsec_len += padding2
+
+        print "SYMBOLS>> OLD: {0}, NEW: {1}".format(hex(old_subsec_len), hex(new_subsec_len))
+        if not RELOCATION_SHIFT[0]:
+            RELOCATION_SHIFT[0] = True
+            RELOCATION_SHIFT[1] = new_subsec_len - old_subsec_len
+
         data_output.extend(sub_output)
 
 
@@ -813,20 +830,39 @@ def process(sections, data, results, data_output):
         assert section.ptr_to_linenumbers == 0
         size_of_relocations = section.number_of_relocations * RELOCATION_SIZE
 
+        make_relocations = False
         if result:
             result.patched_result(data_output)
             # changing
             section.ptr_to_raw_data = new_ptr_to_raw_data + start
             section.size_of_raw_data = len(data_output) - new_ptr_to_raw_data
+            if section.name == '.debug$S' and RELOCATION_SHIFT[2]:
+                make_relocations = True
+                RELOCATION_SHIFT[2] = False
         else:
             if section.ptr_to_raw_data > 0 and section.size_of_raw_data > 0:
                 section.ptr_to_raw_data = new_ptr_to_raw_data + start
                 data_output.fromstring(data[ptr_to_raw_data: ptr_to_raw_data + section.size_of_raw_data])
         # section.ptr_to_raw_data = len(data_output)
         # copying relocations
+
         if section.number_of_relocations > 0:
             new_ptr_to_relocations = len(data_output)
-            data_output.fromstring(data[ptr_to_relocations: ptr_to_relocations + size_of_relocations])
+            relocations_data = data[ptr_to_relocations: ptr_to_relocations + size_of_relocations]
+            if make_relocations:
+                shift = RELOCATION_SHIFT[1]
+                print shift
+                relocation_output = array.array('b')
+                for ri in range(0, section.number_of_relocations):
+                    rdata = relocations_data[ri*RELOCATION_SIZE: (ri+1)*RELOCATION_SIZE]
+                    rva, = struct.unpack_from('<I', rdata)
+                    rva += shift
+                    relocation_output.fromstring(struct.pack('<I', rva))
+                    relocation_output.fromstring(rdata[4:])
+                data_output.extend(relocation_output)
+            else:
+                data_output.fromstring(relocations_data)
+
             section.ptr_to_relocations = new_ptr_to_relocations + start
 
 
