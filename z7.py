@@ -360,7 +360,7 @@ class DebugStringTableSubsection(DebugSubsection):
 
     def dump(self):
         print '  STRINGTABLE'
-        table = self.subsection_data[8:]
+        table = self.subsection_data
         strs = table.split('\0')
         print strs
 
@@ -533,9 +533,11 @@ class GenericSymbol(Symbol):
         data_output.fromstring(self.subsection_data)
 
 
+TYPES_SHIFT = i = 0x1000
 class TypesSection(object):
     def __init__(self, leaves):
         self.leaves = leaves
+        self.min_offset = len(leaves)
 
     def dump(self):
         i = 0x1000
@@ -551,8 +553,67 @@ class TypesSection(object):
         for leaf in self.leaves:
             leaf.patched_result(data_output)
 
+    def mkBuildInfo(self):
+        build_info_leaf = self.leaves[-1]
+        leaf_id = build_info_leaf.get_leaf_id()
+        assert leaf_id == LF_BUILDINFO
+        refs = build_info_leaf.get_ids()
+        workdir = self.get_string(refs[0])
+        build_tool = self.get_string(refs[1])
+        source_file = self.get_string(refs[2])
+        pdb = self.get_string(refs[3])
+        args = self.get_string(refs[4])
+        self.build_info = BuildInfo(self.min_offset, workdir, build_tool, source_file, pdb, args)
+
+
+    def get_string(self, ref):
+        leaf_index = ref - TYPES_SHIFT
+        leaf = self.leaves[leaf_index]
+        leaf_id = leaf.get_leaf_id()
+        self.min_offset = min(self.min_offset, leaf_index)
+        if leaf_id == LF_STRING_ID:
+            ref = leaf.get_ref()
+            result_s = ''
+            if (ref > 0):
+                result_s = self.get_string(ref)
+            result_s += leaf.get_string()
+            return result_s
+        elif leaf_id == LF_SUBSTR_LIST:
+            refs = leaf.get_refs()
+            result_s = ''
+            for ref in refs:
+                result_s += self.get_string(ref)
+            return result_s
+        else:
+            assert False
+
+# https://github.com/google/syzygy/blob/30b171f90991d6332499da77309c8c1a6d931984/third_party/microsoft-pdb-copy/files/cvinfo.h#L22
+class BuildInfo(object):
+    def __init__(self, offset, workdir, build_tool, source_file, pdb, args):
+        self.offset = offset
+        self.workdir = workdir
+        self.build_tool = build_tool
+        self.source_file = source_file
+        self.pdb = pdb
+        self.args = args
+
+    def write(self):
+        # workdir
+        # build_tool
+        # args
+        # source file
+        # pdb
+        pass
+
+
 class Leaf(object):
-    pass
+    def get_leaf_id(self):
+        leaf_id, = struct.unpack_from('<H', self.data, 2)
+        return leaf_id
+
+    def get_len(self):
+        leaf_len, = struct.unpack_from('<H', self.data, 0)
+        return leaf_len
 
 class LeafGeneric(Leaf):
     def __init__(self, data):
@@ -573,6 +634,7 @@ class BuildInfoLeaf(Leaf):
         print '   --------'
         print '   {0}'.format(hex(id))
         count, = struct.unpack_from('<H', self.data, 4)  # 2
+        assert count == 5
         print '             |LF_BUILDINFO: count:{0}'.format(count)
         # references
         for i in range(0, count):
@@ -581,6 +643,13 @@ class BuildInfoLeaf(Leaf):
 
     def patched_result(self, data_output):
         data_output.fromstring(self.data)
+
+    def get_ids(self):
+        ids = []
+        for i in range(0, 5):
+            ref, = struct.unpack_from('<I', self.data, 6 + i * 4)
+            ids.append(ref)
+        return ids
 
 
 class StringLeaf(Leaf):
@@ -625,12 +694,22 @@ class StringLeaf(Leaf):
 
         sub_output.fromstring(result)
 
-        #data_output.fromstring(prefix)
+        # len, type, ref
         data_output.fromstring(struct.pack('<H', len(result) + 6))
         data_output.fromstring(prefix[2:4]) # type
-        data_output.fromstring(prefix[4:8]) # ref
+        data_output.fromstring(prefix[4:8]) # ref (4)
         data_output.fromstring(result)
 
+    def get_string(self):
+        s = self.data[8:]
+        end = s.find('\x00')
+        if end != -1:
+            s = s[0:end]
+        return s
+
+    def get_ref(self):
+        ref, = struct.unpack_from('<I', self.data, 4)
+        return ref
 
 
 class SubstringLeaf(Leaf):
@@ -649,6 +728,15 @@ class SubstringLeaf(Leaf):
 
     def patched_result(self, data_output):
         data_output.fromstring(self.data)
+
+    def get_refs(self):
+        count, = struct.unpack_from('<I', self.data, 4)  # 4
+        refs = []
+        for i in range(0, count):
+            ref, = struct.unpack_from('<I', self.data, 8 + i * 4)
+            refs.append(ref)
+        return refs
+
 
 # returns pairs (section_header, data) - where data to modify
 def dump_sections(data, section_headers):
@@ -787,10 +875,14 @@ def dump_section(data, section_header):
         while pointer < section_header.size_of_raw_data:
             # padding assertions
             assert (pointer % 4) == 0
-            # the length of s_data
+            # len(2), type(2)
+            # the length of s_data without s_len field
             s_len, = struct.unpack_from('<H', data, section_header.ptr_to_raw_data + pointer)
             piece = data[section_header.ptr_to_raw_data + pointer: section_header.ptr_to_raw_data + pointer + s_len + 2]
+            if s_len > 200:
+                print piece
             #print '             {0} slen: {1}'.format(hex(index), s_len)
+
             pointer += 2  # s_len
             leaf, = struct.unpack_from('<H', data, section_header.ptr_to_raw_data + pointer)
 
@@ -807,7 +899,9 @@ def dump_section(data, section_header):
             pointer += s_len
             index += 1
 
-        return TypesSection(leaves)
+        types_section = TypesSection(leaves)
+        types_section.mkBuildInfo()
+        return types_section
 
     return None
 
@@ -969,5 +1063,5 @@ s11 = s1.lower()
 s21 = s2.lower()
 
 # Y:\experiments\yyyyyyyyyyyyyyyyyy -> Y:\experiments\xxx
-dump('experiments/yyyyyyyyyyyyyyyyyy/out.obj', 'experiments/yyyyyyyyyyyyyyyyyy/out-1.obj')
+dump('experiments/yyyyyyyyyyyyyyyyyy/include.obj', 'experiments/yyyyyyyyyyyyyyyyyy/out-1.obj')
 print mapping
