@@ -246,9 +246,12 @@ class DebugSection(object):
     def patched_result(self, data_output):
         data_output.fromstring(struct.pack('<I', 4))
         for subsection in self.subsections:
-            subsection.patched_result(data_output)
-            if (subsection.subsection_len % 4) != 0:
-                 padding = 4 - (subsection.subsection_len % 4)
+            sub_output = array.array('b')
+            subsection.patched_result(sub_output)
+            data_output.extend(sub_output)
+            ln = len(sub_output)
+            if (ln % 4) != 0:
+                 padding = 4 - (ln % 4)
                  data_output.extend(bytearray(padding))
 
 
@@ -292,9 +295,13 @@ class DebugSymbolsSubsection(DebugSubsection):
         # data_output.fromstring(struct.pack('<I', DEBUG_S_SYMBOLS))
         # data_output.fromstring(struct.pack('<I', 100))
         data_output.fromstring(struct.pack('<I', self.subsection_type))
-        data_output.fromstring(struct.pack('<I', self.subsection_len))
+
+        sub_output = array.array('b')
         for symbol in self.symbols:
-            symbol.patched_result(data_output)
+            symbol.patched_result(sub_output)
+
+        data_output.fromstring(struct.pack('<I', len(sub_output)))
+        data_output.extend(sub_output)
 
 
 class DebugFramedataSubsection(DebugSubsection):
@@ -378,15 +385,19 @@ class DebugStringTableSubsection(DebugSubsection):
         #print subst
 
     def patched_result(self, data_output):
-        data_output.fromstring(struct.pack('<I', self.subsection_type))
-        data_output.fromstring(struct.pack('<I', self.subsection_len))
         result = self.subsection_data
         if result.find(s1) != -1:
             result = result.replace(s1, s2)
 
         if result.find(s11) != -1:
             result = result.replace(s11, s21)
-        data_output.fromstring(result)
+        sub_output = array.array('b')
+        sub_output.fromstring(result)
+
+        data_output.fromstring(struct.pack('<I', self.subsection_type))
+        data_output.fromstring(struct.pack('<I', len(sub_output)))
+        data_output.extend(sub_output)
+
 
 class DebugFileChkSumSubsection(DebugSubsection):
     def __init__(self, subsection_type, subsection_len, subsection_data):
@@ -449,13 +460,10 @@ class ObjNameSymbol(Symbol):
         if result.find(s1) != -1:
             result = result.replace(s1, s2)
 
-        try:
-            e =result.find(s11)
-            if e != -1:
-                result = result.replace(s11, s21)
-        except:
-            result = 1
-        data_output.fromstring(result)
+        if result.find(s11) != -1:
+            result = result.replace(s11, s21)
+        data_output.fromstring(struct.pack('<H', len(result) - 2))
+        data_output.fromstring(result[2:])
 
 
 class BuildInfoSymbol(Symbol):
@@ -680,7 +688,6 @@ def dump_section(data, section_header):
                 subsections.append(DebugFramedataSubsection(subsection_type, subsection_len, subsection[prefix_len:]))
             elif subsection_type == DEBUG_S_STRINGTABLE:
                 print "DEBUG_S_STRINGTABLE: {0}".format(hex(xxx_start))
-                ibSym = 8
                 to_change = True
                 subsections.append(DebugStringTableSubsection(subsection_type, subsection_len, subsection[prefix_len:]))
             elif subsection_type == DEBUG_S_FILECHKSMS:
@@ -852,8 +859,8 @@ def dump(input_file, out_file):
         total_output.tofile(ofile)
 
 mapping = {}
-s1 = 'Y:\\experiments'
-s2 = 'Y:\\ixpiriments'
+s1 = 'Y:\\Rxperiments'
+s2 = 'Y:\\Zxpiriments'
 s11 = s1.lower()
 s21 = s2.lower()
 
