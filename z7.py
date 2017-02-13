@@ -778,33 +778,36 @@ def process(sections, data, results, data_output):
     """modifies sections, returns a number of removed bytes and a list of pairs (start, end) to copy"""
     removed_bytes = 0
     to_copy = []
+    # SECTION_HEADERS_START = 20
+    # SECTION_HEADER_SIZE = 40
+
+    start = SECTION_HEADERS_START + SECTION_HEADER_SIZE*len(sections)
+    assert len(data_output) == 0
     for i in range(0, len(sections)):
         section = sections[i]
         result = results[i]
 
+        ptr_to_raw_data = section.ptr_to_raw_data
+        ptr_to_relocations = section.ptr_to_relocations
+        new_ptr_to_raw_data = len(data_output)
         assert section.ptr_to_linenumbers == 0
         size_of_relocations = section.number_of_relocations * RELOCATION_SIZE
-        # size_of_relocations = section.number_of_relocations * RELOCATION_SIZE
-        # if False: #section.should_strip_section():
-        #     removed_bytes = removed_bytes + section.size_of_raw_data + size_of_relocations
-        #     section.ptr_to_raw_data = 0
-        #     section.ptr_to_relocations = 0
-        #     section.size_of_raw_data = 0
-        # else:
-        #     if section.ptr_to_raw_data > 0 and section.size_of_raw_data > 0:
-        #         to_copy.append((section.ptr_to_raw_data, section.ptr_to_raw_data + section.size_of_raw_data))
-        #     if section.number_of_relocations > 0:
-        #         to_copy.append((section.ptr_to_relocations, section.ptr_to_relocations + size_of_relocations))
-        #     section.ptr_to_raw_data = max(section.ptr_to_raw_data - removed_bytes, 0)
-        #     section.ptr_to_relocations = max(section.ptr_to_relocations - removed_bytes, 0)
+
         if result:
             result.patched_result(data_output)
+            # changing
+            section.ptr_to_raw_data = new_ptr_to_raw_data + start
+            section.size_of_raw_data = len(data_output) - new_ptr_to_raw_data
         else:
             if section.ptr_to_raw_data > 0 and section.size_of_raw_data > 0:
-                data_output.fromstring(data[section.ptr_to_raw_data: section.ptr_to_raw_data + section.size_of_raw_data])
+                section.ptr_to_raw_data = new_ptr_to_raw_data + start
+                data_output.fromstring(data[ptr_to_raw_data: ptr_to_raw_data + section.size_of_raw_data])
+        # section.ptr_to_raw_data = len(data_output)
         # copying relocations
         if section.number_of_relocations > 0:
-            data_output.fromstring(data[section.ptr_to_relocations: section.ptr_to_relocations + size_of_relocations])
+            new_ptr_to_relocations = len(data_output)
+            data_output.fromstring(data[ptr_to_relocations: ptr_to_relocations + size_of_relocations])
+            section.ptr_to_relocations = new_ptr_to_relocations + start
 
 
     return removed_bytes, to_copy
@@ -854,12 +857,6 @@ def dump(input_file, out_file):
         if result:
             result.patch()
 
-
-    header.write(output)
-    write_section_headers(
-        output,
-        section_headers)
-
     # stage1: patching debug$S section
     # 1) S_OBJNAME
     # 2) string table
@@ -873,6 +870,11 @@ def dump(input_file, out_file):
     #     header.number_of_symbols,
     #     section_headers)
 
+    header.write(output)
+    write_section_headers(
+        output,
+        section_headers)
+
     start, end = to_copy_string_section
     data_output.fromstring(data[old_pointer_to_symbol_table:start])
     data_output.fromstring(data[start:end])
@@ -882,15 +884,15 @@ def dump(input_file, out_file):
         total_output.tofile(ofile)
 
 mapping = {}
-#s1 = 'Y:\\experiments\\yyyyyyyyyyyyyyyyyy'
-#s2 = 'Y:\\experiments\\xxx'
-
-s1 = 'Y:\\experiments\\yyy'
+s1 = 'Y:\\experiments\\yyyyyyyyyyyyyyyyyy'
 s2 = 'Y:\\experiments\\xxx'
+
+#s1 = 'Y:\\experiments\\yyy'
+#s2 = 'Y:\\experiments\\xxx'
 
 s11 = s1.lower()
 s21 = s2.lower()
 
 # Y:\experiments\yyyyyyyyyyyyyyyyyy -> Y:\experiments\xxx
-dump('experiments/yyy/out.obj', 'experiments/yyy/out-1.obj')
+dump('experiments/yyyyyyyyyyyyyyyyyy/out.obj', 'experiments/yyyyyyyyyyyyyyyyyy/out-1.obj')
 print mapping
