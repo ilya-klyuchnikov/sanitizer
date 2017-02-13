@@ -378,12 +378,15 @@ class DebugStringTableSubsection(DebugSubsection):
         #print subst
 
     def patched_result(self, data_output):
-        # data_output.fromstring(struct.pack('<I', DEBUG_S_STRINGTABLE))
-        # data_output.fromstring(struct.pack('<I', 100))
         data_output.fromstring(struct.pack('<I', self.subsection_type))
         data_output.fromstring(struct.pack('<I', self.subsection_len))
-        data_output.fromstring(self.subsection_data)
+        result = self.subsection_data
+        if result.find(s1) != -1:
+            result = result.replace(s1, s2)
 
+        if result.find(s11) != -1:
+            result = result.replace(s11, s21)
+        data_output.fromstring(result)
 
 class DebugFileChkSumSubsection(DebugSubsection):
     def __init__(self, subsection_type, subsection_len, subsection_data):
@@ -442,7 +445,17 @@ class ObjNameSymbol(Symbol):
         pass
 
     def patched_result(self, data_output):
-        data_output.fromstring(self.subsection_data)
+        result = self.subsection_data
+        if result.find(s1) != -1:
+            result = result.replace(s1, s2)
+
+        try:
+            e =result.find(s11)
+            if e != -1:
+                result = result.replace(s11, s21)
+        except:
+            result = 1
+        data_output.fromstring(result)
 
 
 class BuildInfoSymbol(Symbol):
@@ -506,6 +519,7 @@ class LeafGeneric(Leaf):
     def patched_result(self, data_output):
         data_output.fromstring(self.data)
 
+
 class BuildInfoLeaf(Leaf):
     def __init__(self, data):
         self.data = data
@@ -523,6 +537,7 @@ class BuildInfoLeaf(Leaf):
     def patched_result(self, data_output):
         data_output.fromstring(self.data)
 
+
 class StringLeaf(Leaf):
     def __init__(self, data):
         self.data = data
@@ -530,6 +545,8 @@ class StringLeaf(Leaf):
     def dump(self, id):
         ref, = struct.unpack_from('<I', self.data, 4)
         s = self.data[8:]
+        s_len = len(s)
+        assert (s_len % 4) == 0
         print '   --------'
         print '   {0}'.format(hex(id))
         print '   LF_STRING_ID'
@@ -537,7 +554,14 @@ class StringLeaf(Leaf):
         print '             |s:{0}'.format(s)
 
     def patched_result(self, data_output):
-        data_output.fromstring(self.data)
+        result = self.data
+        if result.find(s1) != -1:
+            result = result.replace(s1, s2)
+
+        if result.find(s11) != -1:
+            result = result.replace(s11, s21)
+        data_output.fromstring(result)
+
 
 class SubstringLeaf(Leaf):
     def __init__(self, data):
@@ -830,6 +854,8 @@ def dump(input_file, out_file):
 mapping = {}
 s1 = 'Y:\\experiments'
 s2 = 'Y:\\ixpiriments'
+s11 = s1.lower()
+s21 = s2.lower()
 
 dump('experiments/short.obj', 'experiments/short-1.obj')
 print mapping
