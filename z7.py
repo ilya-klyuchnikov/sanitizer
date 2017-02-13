@@ -591,9 +591,12 @@ class TypesSection(object):
         else:
             assert False
 
+# TODO: check logic
+# section len 238-266(inclusive)
 MAX_LEN = 259
-MIN_LEN = 238 # TODO
+MIN_LEN = 228 # TODO
 # https://github.com/google/syzygy/blob/30b171f90991d6332499da77309c8c1a6d931984/third_party/microsoft-pdb-copy/files/cvinfo.h#L22
+# https://github.com/Microsoft/microsoft-pdb/blob/082c5290e5aff028ae84e43affa8be717aa7af73/PDB/include/mapfile.h#L34
 class BuildInfo(object):
     # TYPES_SHIFT
     def __init__(self, offset, workdir, build_tool, source_file, pdb, args):
@@ -656,7 +659,7 @@ class BuildInfo(object):
         if len(s) < MAX_LEN:
             return [s]
         else:
-            space_i = s.rfind(' ', MIN_LEN, MAX_LEN)
+            space_i = s.find(' ', MIN_LEN, MAX_LEN)
             if space_i != -1:
                 return [s[:space_i]] + self.split(s[space_i:])
             else:
