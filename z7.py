@@ -550,7 +550,7 @@ class TypesSection(object):
 
     def patched_result(self, data_output):
         data_output.fromstring(struct.pack('<I', 4))
-        for leaf in self.leaves:
+        for leaf in self.leaves[:self.build_info.offset]:
             leaf.patched_result(data_output)
 
     def mkBuildInfo(self):
@@ -587,8 +587,11 @@ class TypesSection(object):
         else:
             assert False
 
+MAX_LEN = 259
+MIN_LEN = 238 # TODO
 # https://github.com/google/syzygy/blob/30b171f90991d6332499da77309c8c1a6d931984/third_party/microsoft-pdb-copy/files/cvinfo.h#L22
 class BuildInfo(object):
+    # TYPES_SHIFT
     def __init__(self, offset, workdir, build_tool, source_file, pdb, args):
         self.offset = offset
         self.workdir = workdir
@@ -597,13 +600,63 @@ class BuildInfo(object):
         self.pdb = pdb
         self.args = args
 
-    def write(self):
-        # workdir
-        # build_tool
-        # args
-        # source file
-        # pdb
-        pass
+    def serialize(self):
+        refs = [0] * 5
+        self.symbols = []
+
+        workdir_strings = self.split(self.workdir)
+        refs[0] = self.store_strings(workdir_strings)
+
+        build_tool_strings = self.split(self.build_tool)
+        refs[1] = self.store_strings(build_tool_strings)
+
+        args_strings = self.split(self.args)
+        refs[2] = self.store_strings(args_strings)
+
+        source_file_strings = self.split(self.source_file)
+        refs[3] = self.store_strings(source_file_strings)
+
+        pdb_strings = self.split(self.pdb)
+        refs[4] = self.store_strings(pdb_strings)
+
+        leaf = BuildInfoLeafEx(refs)
+        self.symbols.append(leaf)
+
+    def store_strings(self, ss):
+        if len(ss) == 1:
+            return self.store_string(ss[0])
+        else:
+            ref1 = self.store_subst_list(ss[:-1])
+            ref2 = self.store_string(ss[-1], ref1)
+            return ref2
+
+
+    def store_subst_list(self, ss):
+        new_refs = []
+        for s in ss:
+            new_ref = self.store_string(s)
+            new_refs.append(new_ref)
+        new_ref = TYPES_SHIFT + self.offset + len(self.symbols)
+        leaf = SubstringLeafEx(new_refs)
+        self.symbols.append(leaf)
+        return new_ref
+
+
+    def store_string(self, s, ref=0):
+        new_ref = TYPES_SHIFT + self.offset + len(self.symbols)
+        leaf = StringLeafEx(s, ref)
+        self.symbols.append(leaf)
+        return new_ref
+
+    def split(self, s):
+        if len(s) < MAX_LEN:
+            return [s]
+        else:
+            space_i = s.rfind(' ', MIN_LEN, MAX_LEN)
+            if space_i != -1:
+                return s[:space_i] + self.split(s[space_i:])
+            else:
+                return s[:MAX_LEN] + self.split(s[MAX_LEN:])
 
 
 class Leaf(object):
@@ -651,6 +704,29 @@ class BuildInfoLeaf(Leaf):
             ids.append(ref)
         return ids
 
+class BuildInfoLeafEx(Leaf):
+    def __init__(self, refs):
+        self.refs = refs
+
+    def dump(self, id):
+        print '   --------'
+        print '   {0}'.format(hex(id))
+        count, = struct.unpack_from('<H', self.data, 4)  # 2
+        assert count == 5
+        print '             |LF_BUILDINFO: count:{0}'.format(count)
+        # references
+        for i in range(0, count):
+            ref, = struct.unpack_from('<I', self.data, 6 + i * 4)
+            print '             |LF_BUILDINFO: ref:{0}'.format(hex(ref))
+
+    def patched_result(self, data_output):
+        lennn = 6 + len(self.refs) * 4  # len(2), type(2), size(2), len*data(4)
+        data_output.fromstring(struct.pack('<H'), lennn)
+        data_output.fromstring(struct.pack('<H'), LF_BUILDINFO)
+        data_output.fromstring(struct.pack('<H'), len(self.refs))
+        for ref in self.refs:
+            data_output.fromstring(struct.pack('<I'), ref)
+
 
 class StringLeaf(Leaf):
     def __init__(self, data):
@@ -676,7 +752,6 @@ class StringLeaf(Leaf):
         result = s
         end = s.find('\x00')
 
-        sub_output = array.array('b')
         if end != -1:
             result = result[0:end + 1]
 
@@ -692,8 +767,6 @@ class StringLeaf(Leaf):
             delta = '\xf3\xf2\xf1'[-padding:]
             result += delta
 
-        sub_output.fromstring(result)
-
         # len, type, ref
         data_output.fromstring(struct.pack('<H', len(result) + 6))
         data_output.fromstring(prefix[2:4]) # type
@@ -705,11 +778,53 @@ class StringLeaf(Leaf):
         end = s.find('\x00')
         if end != -1:
             s = s[0:end]
+        else:
+            # always zero-terminated
+            assert False
+        l = len(s)
+        if len(s)>200:
+            print s
         return s
 
     def get_ref(self):
         ref, = struct.unpack_from('<I', self.data, 4)
         return ref
+
+class StringLeafEx(Leaf):
+    def __init__(self, s, ref=0):
+        self.s = s
+        self.ref = ref
+
+    def dump(self, id):
+        ref, = struct.unpack_from('<I', self.data, 4)
+        s = self.data[8:]
+        s_len = len(s)
+        assert (s_len % 4) == 0
+        print '   --------'
+        print '   {0}'.format(hex(id))
+        print '   LF_STRING_ID'
+        print '             |substringref:{0}'.format(hex(ref))
+        print '             |s:{0}'.format((s,))
+
+    def patched_result(self, data_output):
+        s = self.s
+
+        result = s + '\x00'
+        ln = len(result)
+        if (ln % 4) != 0:
+            padding = 4 - (ln % 4)
+            delta = '\xf3\xf2\xf1'[-padding:]
+            result += delta
+
+        sub_output = array.array('b')
+        sub_output.fromstring(result)
+
+        # len, type, ref
+        data_output.fromstring(struct.pack('<H', len(result) + 6))
+        data_output.fromstring(struct.pack('<H'), LF_STRING_ID)
+        data_output.fromstring(struct.pack('<I'), self.ref)
+        data_output.fromstring(result)
+
 
 
 class SubstringLeaf(Leaf):
@@ -736,6 +851,28 @@ class SubstringLeaf(Leaf):
             ref, = struct.unpack_from('<I', self.data, 8 + i * 4)
             refs.append(ref)
         return refs
+
+class SubstringLeafEx(Leaf):
+    def __init__(self, refs):
+        self.refs = refs
+
+    def dump(self, id):
+        count, = struct.unpack_from('<I', self.data, 4)  # 4
+        print '   --------'
+        print '   {0}'.format(hex(id))
+        print '             |LF_SUBSTR_LIST: count:{0}'.format(count)
+        # references
+        for i in range(0, count):
+            ref, = struct.unpack_from('<I', self.data, 8 + i * 4)
+            print '             |LF_SUBSTR_LIST: ref:{0}'.format(hex(ref))
+
+    def patched_result(self, data_output):
+        lennn = 8 + len(self.refs) * 4 # len(2), type(2), size(4), len*data(4)
+        data_output.fromstring(struct.pack('<H'), lennn)
+        data_output.fromstring(struct.pack('<H'), LF_SUBSTR_LIST)
+        data_output.fromstring(struct.pack('<I'), len(self.refs))
+        for ref in self.refs:
+            data_output.fromstring(struct.pack('<I'), ref)
 
 
 # returns pairs (section_header, data) - where data to modify
@@ -1022,16 +1159,6 @@ def dump(input_file, out_file):
     # 3) patch checksum
 
     process(section_headers, data, results, data_output)
-    # write_symbol_table(
-    #     data_output,
-    #     data,
-    #     old_pointer_to_symbol_table,
-    #     header.number_of_symbols,
-    #     section_headers)
-
-
-
-
 
     startX, endX = to_copy_string_section
     #data_output.fromstring(data[old_pointer_to_symbol_table:start])
@@ -1054,7 +1181,8 @@ def dump(input_file, out_file):
 
 mapping = {}
 s1 = 'Y:\\experiments\\yyyyyyyyyyyyyyyyyy'
-s2 = 'Y:\\experiments\\xxx'
+#s2 = 'Y:\\experiments\\xxx'
+s2 = 'Y:\\experiments\\yyyyyyyyyyyyyyyyyy'
 
 #s1 = 'Y:\\experiments\\yyy'
 #s2 = 'Y:\\experiments\\xxx'
@@ -1063,5 +1191,5 @@ s11 = s1.lower()
 s21 = s2.lower()
 
 # Y:\experiments\yyyyyyyyyyyyyyyyyy -> Y:\experiments\xxx
-dump('experiments/yyyyyyyyyyyyyyyyyy/include.obj', 'experiments/yyyyyyyyyyyyyyyyyy/out-1.obj')
+dump('experiments/yyyyyyyyyyyyyyyyyy/include.obj', 'experiments/yyyyyyyyyyyyyyyyyy/include-1.obj')
 print mapping
