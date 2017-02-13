@@ -344,7 +344,7 @@ class DebugStringTableSubsection(DebugSubsection):
         pass
 
     def init(self):
-        table = self.subsection_data[8:]
+        table = self.subsection_data
         delims = []
         strings = []
         delim = table.find('\0')
@@ -424,7 +424,20 @@ class DebugFileChkSumSubsection(DebugSubsection):
         # data_output.fromstring(struct.pack('<I', 100))
         data_output.fromstring(struct.pack('<I', self.subsection_type))
         data_output.fromstring(struct.pack('<I', self.subsection_len))
-        data_output.fromstring(self.subsection_data)
+
+        ibSym = 0
+        left = len(self.subsection_data)
+        #print '  FILECHKSMS'
+        while left > 0:
+            my_data = self.subsection_data[ibSym:ibSym + 24]
+            offset, = struct.unpack_from('<I', my_data, 0)
+            if offset in mapping:
+                offset = mapping[offset]
+                print 'OFFSET: {0}'.format(hex(offset))
+            data_output.fromstring(struct.pack('<I', offset))
+            data_output.fromstring(my_data[4:])
+            ibSym += 24
+            left -= 24
 
 
 class Symbol(object):
