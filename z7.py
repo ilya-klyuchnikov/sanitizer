@@ -552,6 +552,7 @@ class TypesSection(object):
         data_output.fromstring(struct.pack('<I', 4))
         for leaf in self.leaves[:self.build_info.offset]:
             leaf.patched_result(data_output)
+        self.build_info.patch()
         self.build_info.serialize()
         for leaf in self.build_info.symbols:
             leaf.patched_result(data_output)
@@ -612,6 +613,13 @@ class BuildInfo(object):
         self.pdb = pdb
         self.args = args
 
+    def patch(self):
+        self.workdir = self.p(self.workdir)
+        self.build_tool = self.p(self.build_tool)
+        self.source_file = self.p(self.source_file)
+        self.pdb = self.p(self.pdb)
+        self.args = self.p(self.args)
+
     def serialize(self):
         refs = [0] * 5
         self.symbols = []
@@ -669,6 +677,15 @@ class BuildInfo(object):
                 return [s[:space_i]] + self.split(s[space_i:])
             else:
                 return [s[:MAX_LEN]] + self.split(s[MAX_LEN:])
+
+    def p(self, s):
+        global s1, s2, s11, s21
+        if s.find(s1) != -1:
+            return s.replace(s1, s2)
+
+        if s.find(s11) != -1:
+            return s.replace(s11, s21)
+        return s
 
 
 class Leaf(object):
@@ -1144,7 +1161,20 @@ def write_symbol_table(output, data, pointer_to_symbol_table, number_of_symbols,
                 output.fromstring(symbol)
 
 
-def dump(input_file, out_file):
+mapping = {}
+s1 = 'Y:\\experiments\\yyyyyyyyyyyyyyyyyy'
+s2 = 'Y:\\experiments\\yyyyyyyyyyyyyyyyyy'
+s11 = s1.lower()
+s21 = s2.lower()
+
+
+def patch(input_file, out_file, original_dir, canonical_dir):
+    global s1, s2, s11, s21
+    s1 = original_dir
+    s2 = canonical_dir
+    s11 = s1.lower()
+    s21 = s2.lower()
+
     with open(input_file, 'rb') as ifile:
         data = ifile.read()
 
@@ -1192,17 +1222,24 @@ def dump(input_file, out_file):
 
     print "TOCOPY: {0},{1}".format(hex(startX), hex(endX))
 
-mapping = {}
-s1 = 'Y:\\experiments\\yyyyyyyyyyyyyyyyyy'
-#s2 = 'Y:\\experiments\\xxx'
-s2 = 'Y:\\experiments\\yyyyyyyyyyyyyyyyyy'
+import optparse
+def main(args=None):
+    parser = optparse.OptionParser()
+    parser.add_option("--input-object", dest="input_object",
+                      help="input object file (implies --output-object)", metavar="FILE")
+    parser.add_option("--output-object", dest="output_object",
+                      help="output object file", metavar="FILE")
+    parser.add_option("--original-dir", dest="original_dir",
+                      help="original directory", metavar="DIR")
+    parser.add_option("--canonical-dir", dest="canonical_dir",
+                      help="canonical directory", metavar="DIR")
 
-#s1 = 'Y:\\experiments\\yyy'
-#s2 = 'Y:\\experiments\\xxx'
+    (options, args) = parser.parse_args(args)
 
-s11 = s1.lower()
-s21 = s2.lower()
+    if options.input_object and options.output_object and options.original_dir and options.canonical_dir:
+        patch(options.input_object, options.output_object, options.original_dir, options.canonical_dir)
+    else:
+        parser.print_help()
 
-# Y:\experiments\yyyyyyyyyyyyyyyyyy -> Y:\experiments\xxx
-dump('experiments/yyyyyyyyyyyyyyyyyy/include.obj', 'experiments/yyyyyyyyyyyyyyyyyy/include-1.obj')
-print mapping
+if __name__ == '__main__':
+    main()
