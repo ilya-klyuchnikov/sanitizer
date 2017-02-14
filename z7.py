@@ -591,10 +591,15 @@ class TypesSection(object):
         else:
             assert False
 
-# TODO: check logic
-# section len 238-266(inclusive)
+# observations from running cl.exe + cvdump.exe:
+# the length of symbol varies 238 - 266 => data varies 232 - 260
+#
+# Since all substrings are null-terminated,
+# MAX_LEN = 259 (260 with null).
+# MAX_PADDING = \x00\xf3\xf2\xf1 =>
+# MIN_LEN = MIN_DATA - MAXPADDING = 228
 MAX_LEN = 259
-MIN_LEN = 228 # TODO
+MIN_LEN = 228
 # https://github.com/google/syzygy/blob/30b171f90991d6332499da77309c8c1a6d931984/third_party/microsoft-pdb-copy/files/cvinfo.h#L22
 # https://github.com/Microsoft/microsoft-pdb/blob/082c5290e5aff028ae84e43affa8be717aa7af73/PDB/include/mapfile.h#L34
 class BuildInfo(object):
