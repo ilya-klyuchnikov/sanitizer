@@ -468,7 +468,7 @@ class DebugFileChkSumSubsection(DebugSubsection):
 class Symbol(object):
     pass
 
-
+# https://github.com/Microsoft/microsoft-pdb/blob/082c5290e5aff028ae84e43affa8be717aa7af73/include/cvinfo.h#L3382
 class ObjNameSymbol(Symbol):
     def __init__(self, subsection_data):
         self.subsection_data = subsection_data
@@ -542,6 +542,7 @@ def read_debug_symbols_section(data, section_header):
     subsections = []
     while rel_pointer < section_header.size_of_raw_data:
 
+        ####### READING META INFORMATION ABOUT SUB_SECTION AND SECTION SUB_DATA
         if (rel_pointer % 4) != 0:
             padding = 4 - (rel_pointer % 4)
             rel_pointer += padding
@@ -561,6 +562,7 @@ def read_debug_symbols_section(data, section_header):
         subsection_len_len = 4
         rel_pointer += subsection_len_len
 
+        # type +
         prefix_len = subsection_type_len + subsection_len_len
 
         # subsection includes type and len!!
@@ -570,35 +572,21 @@ def read_debug_symbols_section(data, section_header):
         assert subsection_len != 0
 
         if subsection_type == DEBUG_S_SYMBOLS:
-
-            ibSym = 8
+            ibSym = prefix_len
             left = subsection_len
             to_change_this = False
+
             symbols = []
             while left > 0:
-
                 reclen, = struct.unpack_from('<H', sub_data, ibSym)  # 2
-                symbolData = sub_data[ibSym: ibSym + reclen + 2]
-                type, = struct.unpack_from('<H', sub_data, ibSym + 2)  # 2
-                type_len = 2
-
-                symbol = None
+                reclen_len = 2
+                symbolData = sub_data[ibSym: ibSym + reclen + reclen_len]
+                type, = struct.unpack_from('<H', sub_data, ibSym + reclen_len)  # 2
                 if type == S_OBJNAME:
                     to_change_this = True
                     to_change = True
-                    signature = struct.unpack_from('<I', symbolData, 4)
-                    signature_len = 4
-                    slen = reclen - signature_len - type_len  # (type, signature)
-                    fmt = '{0}s'.format(slen)
-                    name, = struct.unpack_from(fmt, symbolData, 8)
-                    # null terminated
-                    # print '    S_OBJNAME: {0}'.format(name)
-                    # includes reclen
-                    # TODO - remove reclen, remove type - directly in constructor
                     symbol = ObjNameSymbol(symbolData)
                 elif type == S_BUILDINFO:
-                    id, = struct.unpack_from('<I', symbolData, 4)
-                    # print '    S_BUILDINFO: {0}'.format(hex(id))
                     to_change_this = True
                     to_change = True
                     symbol = BuildInfoSymbol(symbolData)
@@ -607,35 +595,24 @@ def read_debug_symbols_section(data, section_header):
                 symbols.append(symbol)
                 ibSym += 2 + reclen  # type
                 left -= (2 + reclen)
+
             if to_change_this:
                 subsections.append(DebugSymbolsSubsection(subsection_type, subsection_len, symbols))
             else:
                 subsections.append(DebugGenericSubsection(subsection_type, subsection_len, sub_data[prefix_len:]))
 
         elif subsection_type == DEBUG_S_FRAMEDATA:
-            # easy
-            ibSym = 8
             assert subsection_len == 36
-
-            # TODO reading in cycle
             to_change = True
             subsections.append(DebugFramedataSubsection(subsection_type, subsection_len, sub_data[prefix_len:]))
         elif subsection_type == DEBUG_S_STRINGTABLE:
             to_change = True
             subsections.append(DebugStringTableSubsection(subsection_type, subsection_len, sub_data[prefix_len:]))
         elif subsection_type == DEBUG_S_FILECHKSMS:
-            ibSym = 8
-            left = subsection_len
-            while left > 0:
-                my_data = sub_data[ibSym:ibSym + 24]
-                offset, = struct.unpack_from('<I', my_data, 0)
-                # print '     oFFSET: {0}'.format(hex(offset))
-                ibSym += 24
-                left -= 24
             to_change = True
-            subsections.append(DebugFileChkSumSubsection(subsection_type, subsection_len, sub_data[8:]))
+            subsections.append(DebugFileChkSumSubsection(subsection_type, subsection_len, sub_data[prefix_len:]))
         else:
-            subsections.append(DebugGenericSubsection(subsection_type, subsection_len, sub_data[8:]))
+            subsections.append(DebugGenericSubsection(subsection_type, subsection_len, sub_data[prefix_len:]))
 
         rel_pointer = rel_pointer + subsection_len
     if to_change:
@@ -1196,10 +1173,6 @@ def patch(input_file, out_file, original_dir, canonical_dir):
     string_section = data[header.pointer_to_symbol_table + symbol_table_size:]
 
     results = read_debug_sections(data, section_headers)
-    # for result in results:
-    #     if result:
-    #         result.dump()
-    #         pass
 
     for result in results:
         if result:
