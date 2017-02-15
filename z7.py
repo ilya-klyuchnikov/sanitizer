@@ -542,15 +542,14 @@ def read_debug_symbols_section(data, section_header):
     subsections = []
     while rel_pointer < section_header.size_of_raw_data:
 
-        # absolute start of this subsection
-
         if (rel_pointer % 4) != 0:
             padding = 4 - (rel_pointer % 4)
             rel_pointer += padding
         if rel_pointer == section_header.size_of_raw_data:
             break
 
-        subsection_start = rel_pointer
+        sub_rel_start = rel_pointer
+        sub_abs_start = section_header.ptr_to_raw_data + sub_rel_start
 
         # subsection_type(4)
         subsection_type, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data + rel_pointer)
@@ -565,8 +564,8 @@ def read_debug_symbols_section(data, section_header):
         prefix_len = subsection_type_len + subsection_len_len
 
         # subsection includes type and len!!
-        subsection = data[
-                     section_header.ptr_to_raw_data + subsection_start: section_header.ptr_to_raw_data + subsection_start + subsection_len + 8]
+        # the binary data of the current subsection WITH prefix (metadata)
+        sub_data = data[sub_abs_start: sub_abs_start + subsection_len + prefix_len]
 
         assert subsection_len != 0
 
@@ -578,9 +577,9 @@ def read_debug_symbols_section(data, section_header):
             symbols = []
             while left > 0:
 
-                reclen, = struct.unpack_from('<H', subsection, ibSym)  # 2
-                symbolData = subsection[ibSym: ibSym + reclen + 2]
-                type, = struct.unpack_from('<H', subsection, ibSym + 2)  # 2
+                reclen, = struct.unpack_from('<H', sub_data, ibSym)  # 2
+                symbolData = sub_data[ibSym: ibSym + reclen + 2]
+                type, = struct.unpack_from('<H', sub_data, ibSym + 2)  # 2
                 type_len = 2
 
                 symbol = None
@@ -611,7 +610,7 @@ def read_debug_symbols_section(data, section_header):
             if to_change_this:
                 subsections.append(DebugSymbolsSubsection(subsection_type, subsection_len, symbols))
             else:
-                subsections.append(DebugGenericSubsection(subsection_type, subsection_len, subsection[prefix_len:]))
+                subsections.append(DebugGenericSubsection(subsection_type, subsection_len, sub_data[prefix_len:]))
 
         elif subsection_type == DEBUG_S_FRAMEDATA:
             # easy
@@ -620,23 +619,23 @@ def read_debug_symbols_section(data, section_header):
 
             # TODO reading in cycle
             to_change = True
-            subsections.append(DebugFramedataSubsection(subsection_type, subsection_len, subsection[prefix_len:]))
+            subsections.append(DebugFramedataSubsection(subsection_type, subsection_len, sub_data[prefix_len:]))
         elif subsection_type == DEBUG_S_STRINGTABLE:
             to_change = True
-            subsections.append(DebugStringTableSubsection(subsection_type, subsection_len, subsection[prefix_len:]))
+            subsections.append(DebugStringTableSubsection(subsection_type, subsection_len, sub_data[prefix_len:]))
         elif subsection_type == DEBUG_S_FILECHKSMS:
             ibSym = 8
             left = subsection_len
             while left > 0:
-                my_data = subsection[ibSym:ibSym + 24]
+                my_data = sub_data[ibSym:ibSym + 24]
                 offset, = struct.unpack_from('<I', my_data, 0)
                 # print '     oFFSET: {0}'.format(hex(offset))
                 ibSym += 24
                 left -= 24
             to_change = True
-            subsections.append(DebugFileChkSumSubsection(subsection_type, subsection_len, subsection[8:]))
+            subsections.append(DebugFileChkSumSubsection(subsection_type, subsection_len, sub_data[8:]))
         else:
-            subsections.append(DebugGenericSubsection(subsection_type, subsection_len, subsection[8:]))
+            subsections.append(DebugGenericSubsection(subsection_type, subsection_len, sub_data[8:]))
 
         rel_pointer = rel_pointer + subsection_len
     if to_change:
