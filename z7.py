@@ -4,13 +4,7 @@ import array
 SECTION_HEADERS_START = 20
 SECTION_HEADER_SIZE = 40
 
-RELOCATION_SIZE = 10
 SYMBOL_SIZE = 18
-AUX_SYMBOLS_FORMAT = '<B'
-AUX_SYMBOLS_OFFSET = 17
-SECTION_SYMBOL_FORMAT = '<h'
-SECTION_SYMBOL_OFFSET = 12
-
 
 class FileHeader(object):
     MACHINE_OFFSET = 0
@@ -119,6 +113,18 @@ class SectionHeader(object):
     CHARACTERISTICS_OFFSET = 36
     CHARACTERISTICS_FORMAT = '<I'
 
+    @staticmethod
+    def read_section_headers(data, number_of_sections):
+        """read section headers from binaries"""
+        sections = []
+        for section_i in range(0, number_of_sections):
+            section = SectionHeader(
+                data,
+                SECTION_HEADERS_START + (section_i * SECTION_HEADER_SIZE)
+            )
+            sections.append(section)
+        return sections
+
     def __init__(self, data, section_start):
         self.name, = struct.unpack_from(
             SectionHeader.NAME_FORMAT,
@@ -198,17 +204,6 @@ class SectionHeader(object):
         return False
 
 
-def read_section_headers(data, number_of_sections):
-    """read section headers from binaries"""
-    sections = []
-    for section_i in range(0, number_of_sections):
-        section = SectionHeader(
-            data,
-            SECTION_HEADERS_START + (section_i * SECTION_HEADER_SIZE)
-        )
-        sections.append(section)
-    return sections
-
 #define CV_SIGNATURE_C7         1L  // First explicit signature
 #define CV_SIGNATURE_C11        2L  // C11 (vc5.x) 32-bit types
 #define CV_SIGNATURE_C13        4L  // C13 (vc7.x) zero terminated names
@@ -221,9 +216,9 @@ DEBUG_S_FRAMEDATA   = 245
 S_OBJNAME           = 0x1101  # path to object file name
 S_BUILDINFO         = 0x114c
 
-LF_BUILDINFO     = 0x1603
-LF_SUBSTR_LIST   = 0x1604
-LF_STRING_ID     = 0x1605
+LF_BUILDINFO        = 0x1603
+LF_SUBSTR_LIST      = 0x1604
+LF_STRING_ID        = 0x1605
 
 
 class DebugSection(object):
@@ -1068,6 +1063,7 @@ def dump_section(data, section_header):
     return None
 
 def process(sections, data, results, data_output):
+    RELOCATION_SIZE = 10
     """modifies sections, returns a number of removed bytes and a list of pairs (start, end) to copy"""
     removed_bytes = 0
     to_copy = []
@@ -1131,6 +1127,10 @@ def write_section_headers(output, sections):
 
 
 def write_symbol_table(output, data, pointer_to_symbol_table, number_of_symbols, sections_headers, results):
+    SECTION_SYMBOL_OFFSET = 12
+    SECTION_SYMBOL_FORMAT = '<h'
+    AUX_SYMBOLS_FORMAT = '<B'
+    AUX_SYMBOLS_OFFSET = 17
     aux_symbols = 0
     change_next = False
     section = None
@@ -1160,8 +1160,8 @@ def write_symbol_table(output, data, pointer_to_symbol_table, number_of_symbols,
 # TODO - and then we can more reasonably move symbols:
 RELOCATION_SHIFT = [False, 0, True]
 mapping = {}
-s1 = 'Y:\\experiments\\yyyyyyyyyyyyyyyyyy'
-s2 = 'Y:\\experiments\\yyyyyyyyyyyyyyyyyy'
+s1 = ''
+s2 = ''
 s11 = s1.lower()
 s21 = s2.lower()
 
@@ -1185,7 +1185,7 @@ def patch(input_file, out_file, original_dir, canonical_dir):
 
     header = FileHeader(data)
     old_pointer_to_symbol_table = header.pointer_to_symbol_table
-    section_headers = read_section_headers(data, header.number_of_sections)
+    section_headers = SectionHeader.read_section_headers(data, header.number_of_sections)
     to_copy_string_section = header.pointer_to_symbol_table + (SYMBOL_SIZE * header.number_of_symbols), len(data)
 
     results = dump_sections(data, section_headers)
