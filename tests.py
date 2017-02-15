@@ -2,7 +2,6 @@ import obj
 import subprocess
 import shutil
 import json
-import os
 import pipes
 import pefile
 import lib
@@ -36,6 +35,7 @@ TESTS = [
     "testdata/03",
     "testdata/04",
     "testdata/05",
+    "testdata/06",
 ]
 
 

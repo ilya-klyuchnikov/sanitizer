@@ -276,8 +276,6 @@ class DebugGenericSubsection(DebugSubsection):
         data_output.fromstring(struct.pack('<I', self.subsection_len))
         data_output.fromstring(self.subsection_data)
 
-RELOCATION_SHIFT = [False, 0, True]
-
 class DebugSymbolsSubsection(DebugSubsection):
     def __init__(self, subsection_type, subsection_len, symbols):
         self.subsection_type = subsection_type
@@ -315,8 +313,11 @@ class DebugSymbolsSubsection(DebugSubsection):
 
         print "SYMBOLS>> OLD: {0}, NEW: {1}".format(hex(old_subsec_len), hex(new_subsec_len))
         if not RELOCATION_SHIFT[0]:
+            print "SHIFTING"
             RELOCATION_SHIFT[0] = True
             RELOCATION_SHIFT[1] = new_subsec_len - old_subsec_len
+        else:
+            print "NO SHIFTING"
 
         data_output.extend(sub_output)
 
@@ -713,15 +714,15 @@ class BuildInfoLeaf(Leaf):
         self.data = data
 
     def dump(self, id):
-        print '   --------'
-        print '   {0}'.format(hex(id))
+        #print '   --------'
+        #print '   {0}'.format(hex(id))
         count, = struct.unpack_from('<H', self.data, 4)  # 2
         assert count == 5
-        print '             |LF_BUILDINFO: count:{0}'.format(count)
+        #print '             |LF_BUILDINFO: count:{0}'.format(count)
         # references
         for i in range(0, count):
             ref, = struct.unpack_from('<I', self.data, 6 + i * 4)
-            print '             |LF_BUILDINFO: ref:{0}'.format(hex(ref))
+            #print '             |LF_BUILDINFO: ref:{0}'.format(hex(ref))
 
     def patched_result(self, data_output):
         data_output.fromstring(self.data)
@@ -738,15 +739,15 @@ class BuildInfoLeafEx(Leaf):
         self.refs = refs
 
     def dump(self, id):
-        print '   --------'
-        print '   {0}'.format(hex(id))
+        #print '   --------'
+        #print '   {0}'.format(hex(id))
         count, = struct.unpack_from('<H', self.data, 4)  # 2
         assert count == 5
-        print '             |LF_BUILDINFO: count:{0}'.format(count)
+        #print '             |LF_BUILDINFO: count:{0}'.format(count)
         # references
         for i in range(0, count):
             ref, = struct.unpack_from('<I', self.data, 6 + i * 4)
-            print '             |LF_BUILDINFO: ref:{0}'.format(hex(ref))
+            #print '             |LF_BUILDINFO: ref:{0}'.format(hex(ref))
 
     def patched_result(self, data_output):
         lennn = 6 + len(self.refs) * 4  # type(2), size(2), len*data(4)
@@ -767,11 +768,11 @@ class StringLeaf(Leaf):
         s = self.data[8:]
         s_len = len(s)
         assert (s_len % 4) == 0
-        print '   --------'
-        print '   {0}'.format(hex(id))
-        print '   LF_STRING_ID'
-        print '             |substringref:{0}'.format(hex(ref))
-        print '             |s:{0}'.format((s,))
+        #print '   --------'
+        ##print '   {0}'.format(hex(id))
+        #print '   LF_STRING_ID'
+        #print '             |substringref:{0}'.format(hex(ref))
+        #print '             |s:{0}'.format((s,))
 
     def patched_result(self, data_output):
         prefix = self.data[0:8]
@@ -1161,6 +1162,9 @@ def write_symbol_table(output, data, pointer_to_symbol_table, number_of_symbols,
                 output.fromstring(symbol)
 
 
+# TODO - we can support the full parsing of symbols (microsoft-pdb allows it)
+# TODO - and then we can more reasonably move symbols:
+RELOCATION_SHIFT = [False, 0, True]
 mapping = {}
 s1 = 'Y:\\experiments\\yyyyyyyyyyyyyyyyyy'
 s2 = 'Y:\\experiments\\yyyyyyyyyyyyyyyyyy'
@@ -1169,11 +1173,15 @@ s21 = s2.lower()
 
 
 def patch(input_file, out_file, original_dir, canonical_dir):
-    global s1, s2, s11, s21
+    global s1, s2, s11, s21, mapping
+    global RELOCATION_SHIFT
+
     s1 = original_dir
     s2 = canonical_dir
     s11 = s1.lower()
     s21 = s2.lower()
+    RELOCATION_SHIFT = [False, 0, True]
+    mapping = {}
 
     with open(input_file, 'rb') as ifile:
         data = ifile.read()
