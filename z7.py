@@ -224,7 +224,7 @@ S_BUILDINFO         = 0x114c
 LF_BUILDINFO        = 0x1603
 LF_SUBSTR_LIST      = 0x1604
 LF_STRING_ID        = 0x1605
-
+CV_SIGNATURE_C13    = 4
 
 class DebugSection(object):
     def __init__(self, subsections):
@@ -902,171 +902,177 @@ class SubstringLeafEx(Leaf):
 
 
 # returns pairs (section_header, data) - where data to modify
-def dump_sections(data, section_headers):
+def read_debug_sections(data, section_headers):
     section_results = []
     for section_header in section_headers:
-        section_result = dump_section(data, section_header)
+        section_result = read_debug_section(data, section_header)
         section_results.append(section_result)
     return section_results
 
 
-def dump_section(data, section_header):
+def read_debug_section(data, section_header):
+
     if section_header.name == '.debug$S':
-        sig, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data)
-        assert sig == 4
-        pointer = 4
-        to_change = False
-        subsections = []
-        while pointer < section_header.size_of_raw_data:
-
-            xxx_start = section_header.ptr_to_raw_data + pointer
-            print("START: {0}".format(hex(xxx_start)))
-
-            if (pointer % 4) != 0:
-                padding = 4 - (pointer % 4)
-                pointer += padding
-            if pointer == section_header.size_of_raw_data:
-                break
-
-            subsection_start = pointer
-            subsection_type, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data + pointer)
-            subsection_type_len = 4
-            pointer += subsection_type_len
-
-            subsection_len, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data + pointer)
-            subsection_len_len = 4
-            pointer += subsection_len_len
-
-            prefix_len = subsection_type_len + subsection_len_len
-
-            # subsection includes type and len!!
-            subsection = data[
-                         section_header.ptr_to_raw_data + subsection_start : section_header.ptr_to_raw_data + subsection_start + subsection_len + 8]
-
-            assert subsection_len != 0
-
-            if subsection_type == DEBUG_S_SYMBOLS:
-
-                ibSym = 8
-                left = subsection_len
-                to_change_this = False
-                symbols = []
-                while left > 0:
-
-                    reclen, = struct.unpack_from('<H', subsection, ibSym)  # 2
-                    symbolData = subsection[ibSym: ibSym + reclen + 2]
-                    type, = struct.unpack_from('<H', subsection, ibSym + 2)  # 2
-                    type_len = 2
-
-                    symbol = None
-                    if type == S_OBJNAME:
-                        to_change_this = True
-                        to_change = True
-                        signature = struct.unpack_from('<I', symbolData, 4)
-                        signature_len = 4
-                        slen = reclen - signature_len - type_len  # (type, signature)
-                        fmt = '{0}s'.format(slen)
-                        name, = struct.unpack_from(fmt, symbolData, 8)
-                        # null terminated
-                        #print '    S_OBJNAME: {0}'.format(name)
-                        # includes reclen
-                        # TODO - remove reclen, remove type - directly in constructor
-                        symbol = ObjNameSymbol(symbolData)
-                    elif type == S_BUILDINFO:
-                        id, = struct.unpack_from('<I', symbolData, 4)
-                        #print '    S_BUILDINFO: {0}'.format(hex(id))
-                        to_change_this = True
-                        to_change = True
-                        symbol = BuildInfoSymbol(symbolData)
-                    else:
-                        symbol = GenericSymbol(symbolData)
-                    symbols.append(symbol)
-                    ibSym += 2 + reclen  # type
-                    left -= (2 + reclen)
-                if to_change_this:
-                    print("DEBUG_S_SYMBOLS: {0}".format(hex(xxx_start)))
-                    subsections.append(DebugSymbolsSubsection(subsection_type, subsection_len, symbols))
-                else:
-                    print("OTHER: {0}".format(hex(xxx_start)))
-                    subsections.append(DebugGenericSubsection(subsection_type, subsection_len, subsection[prefix_len:]))
-
-            elif subsection_type == DEBUG_S_FRAMEDATA:
-                print("DEBUG_S_FRAMEDATA: {0}".format(hex(xxx_start)))
-                # easy
-                ibSym = 8
-                assert subsection_len == 36
-
-                # TODO reading in cycle
-                to_change = True
-                subsections.append(DebugFramedataSubsection(subsection_type, subsection_len, subsection[prefix_len:]))
-            elif subsection_type == DEBUG_S_STRINGTABLE:
-                print("DEBUG_S_STRINGTABLE: {0}".format(hex(xxx_start)))
-                to_change = True
-                subsections.append(DebugStringTableSubsection(subsection_type, subsection_len, subsection[prefix_len:]))
-            elif subsection_type == DEBUG_S_FILECHKSMS:
-                print("DEBUG_S_FILECHKSMS: {0}".format(hex(xxx_start)))
-                ibSym = 8
-                left = subsection_len
-                while left > 0:
-                    my_data = subsection[ibSym:ibSym + 24]
-                    offset, = struct.unpack_from('<I', my_data, 0)
-                    #print '     oFFSET: {0}'.format(hex(offset))
-                    ibSym += 24
-                    left -= 24
-                to_change = True
-                subsections.append(DebugFileChkSumSubsection(subsection_type, subsection_len, subsection[8:]))
-            else:
-                print("OTHER: {0}".format(hex(xxx_start)))
-                subsections.append(DebugGenericSubsection(subsection_type, subsection_len, subsection[8:]))
-
-            pointer = pointer + subsection_len
-
-        if to_change:
-            return DebugSection(subsections)
-        else:
-            return None
+        return read_debug_symbols_section(data, section_header)
 
     elif section_header.name == '.debug$T':
-        sig, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data)
-
-        assert sig == 4
-
-        pointer = 0
-        pointer += 4  # sig
-        index = 0x1000
-        leaves = []
-        while pointer < section_header.size_of_raw_data:
-            # padding assertions
-            assert (pointer % 4) == 0
-            # len(2), type(2)
-            # the length of s_data without s_len field
-            s_len, = struct.unpack_from('<H', data, section_header.ptr_to_raw_data + pointer)
-            piece = data[section_header.ptr_to_raw_data + pointer: section_header.ptr_to_raw_data + pointer + s_len + 2]
-            if s_len > 200:
-                print(piece)
-            #print '             {0} slen: {1}'.format(hex(index), s_len)
-
-            pointer += 2  # s_len
-            leaf, = struct.unpack_from('<H', data, section_header.ptr_to_raw_data + pointer)
-
-            # s_len, ref
-            if leaf == LF_STRING_ID:
-                leaves.append(StringLeaf(piece))
-            elif leaf == LF_BUILDINFO:
-                leaves.append(BuildInfoLeaf(piece))
-            elif leaf == LF_SUBSTR_LIST:
-                leaves.append(SubstringLeaf(piece))
-            else:
-                leaves.append(LeafGeneric(piece))
-
-            pointer += s_len
-            index += 1
-
-        types_section = DebugTypesSection(leaves)
-        types_section.mkBuildInfo()
-        return types_section
+        return read_debug_types_section(data, section_header)
 
     return None
+
+
+def read_debug_symbols_section(data, section_header):
+    sig, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data)
+    assert sig == CV_SIGNATURE_C13
+    pointer = 4
+    to_change = False
+    subsections = []
+    while pointer < section_header.size_of_raw_data:
+
+        xxx_start = section_header.ptr_to_raw_data + pointer
+        print("START: {0}".format(hex(xxx_start)))
+
+        if (pointer % 4) != 0:
+            padding = 4 - (pointer % 4)
+            pointer += padding
+        if pointer == section_header.size_of_raw_data:
+            break
+
+        subsection_start = pointer
+        subsection_type, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data + pointer)
+        subsection_type_len = 4
+        pointer += subsection_type_len
+
+        subsection_len, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data + pointer)
+        subsection_len_len = 4
+        pointer += subsection_len_len
+
+        prefix_len = subsection_type_len + subsection_len_len
+
+        # subsection includes type and len!!
+        subsection = data[
+                     section_header.ptr_to_raw_data + subsection_start: section_header.ptr_to_raw_data + subsection_start + subsection_len + 8]
+
+        assert subsection_len != 0
+
+        if subsection_type == DEBUG_S_SYMBOLS:
+
+            ibSym = 8
+            left = subsection_len
+            to_change_this = False
+            symbols = []
+            while left > 0:
+
+                reclen, = struct.unpack_from('<H', subsection, ibSym)  # 2
+                symbolData = subsection[ibSym: ibSym + reclen + 2]
+                type, = struct.unpack_from('<H', subsection, ibSym + 2)  # 2
+                type_len = 2
+
+                symbol = None
+                if type == S_OBJNAME:
+                    to_change_this = True
+                    to_change = True
+                    signature = struct.unpack_from('<I', symbolData, 4)
+                    signature_len = 4
+                    slen = reclen - signature_len - type_len  # (type, signature)
+                    fmt = '{0}s'.format(slen)
+                    name, = struct.unpack_from(fmt, symbolData, 8)
+                    # null terminated
+                    # print '    S_OBJNAME: {0}'.format(name)
+                    # includes reclen
+                    # TODO - remove reclen, remove type - directly in constructor
+                    symbol = ObjNameSymbol(symbolData)
+                elif type == S_BUILDINFO:
+                    id, = struct.unpack_from('<I', symbolData, 4)
+                    # print '    S_BUILDINFO: {0}'.format(hex(id))
+                    to_change_this = True
+                    to_change = True
+                    symbol = BuildInfoSymbol(symbolData)
+                else:
+                    symbol = GenericSymbol(symbolData)
+                symbols.append(symbol)
+                ibSym += 2 + reclen  # type
+                left -= (2 + reclen)
+            if to_change_this:
+                print("DEBUG_S_SYMBOLS: {0}".format(hex(xxx_start)))
+                subsections.append(DebugSymbolsSubsection(subsection_type, subsection_len, symbols))
+            else:
+                print("OTHER: {0}".format(hex(xxx_start)))
+                subsections.append(DebugGenericSubsection(subsection_type, subsection_len, subsection[prefix_len:]))
+
+        elif subsection_type == DEBUG_S_FRAMEDATA:
+            print("DEBUG_S_FRAMEDATA: {0}".format(hex(xxx_start)))
+            # easy
+            ibSym = 8
+            assert subsection_len == 36
+
+            # TODO reading in cycle
+            to_change = True
+            subsections.append(DebugFramedataSubsection(subsection_type, subsection_len, subsection[prefix_len:]))
+        elif subsection_type == DEBUG_S_STRINGTABLE:
+            print("DEBUG_S_STRINGTABLE: {0}".format(hex(xxx_start)))
+            to_change = True
+            subsections.append(DebugStringTableSubsection(subsection_type, subsection_len, subsection[prefix_len:]))
+        elif subsection_type == DEBUG_S_FILECHKSMS:
+            print("DEBUG_S_FILECHKSMS: {0}".format(hex(xxx_start)))
+            ibSym = 8
+            left = subsection_len
+            while left > 0:
+                my_data = subsection[ibSym:ibSym + 24]
+                offset, = struct.unpack_from('<I', my_data, 0)
+                # print '     oFFSET: {0}'.format(hex(offset))
+                ibSym += 24
+                left -= 24
+            to_change = True
+            subsections.append(DebugFileChkSumSubsection(subsection_type, subsection_len, subsection[8:]))
+        else:
+            print("OTHER: {0}".format(hex(xxx_start)))
+            subsections.append(DebugGenericSubsection(subsection_type, subsection_len, subsection[8:]))
+
+        pointer = pointer + subsection_len
+    if to_change:
+        return DebugSection(subsections)
+    else:
+        return None
+
+
+def read_debug_types_section(data, section_header):
+    sig, = struct.unpack_from('<I', data, section_header.ptr_to_raw_data)
+    assert sig == CV_SIGNATURE_C13
+    pointer = 0
+    pointer += 4  # sig
+    index = 0x1000
+    leaves = []
+    while pointer < section_header.size_of_raw_data:
+        # padding assertions
+        assert (pointer % 4) == 0
+        # len(2), type(2)
+        # the length of s_data without s_len field
+        s_len, = struct.unpack_from('<H', data, section_header.ptr_to_raw_data + pointer)
+        piece = data[section_header.ptr_to_raw_data + pointer: section_header.ptr_to_raw_data + pointer + s_len + 2]
+        if s_len > 200:
+            print(piece)
+        # print '             {0} slen: {1}'.format(hex(index), s_len)
+
+        pointer += 2  # s_len
+        leaf, = struct.unpack_from('<H', data, section_header.ptr_to_raw_data + pointer)
+
+        # s_len, ref
+        if leaf == LF_STRING_ID:
+            leaves.append(StringLeaf(piece))
+        elif leaf == LF_BUILDINFO:
+            leaves.append(BuildInfoLeaf(piece))
+        elif leaf == LF_SUBSTR_LIST:
+            leaves.append(SubstringLeaf(piece))
+        else:
+            leaves.append(LeafGeneric(piece))
+
+        pointer += s_len
+        index += 1
+    types_section = DebugTypesSection(leaves)
+    types_section.mkBuildInfo()
+    return types_section
+
 
 def process(sections, data, results, data_output):
     RELOCATION_SIZE = 10
@@ -1127,7 +1133,7 @@ def process(sections, data, results, data_output):
     return removed_bytes, to_copy
 
 
-def write_symbol_table(output, data, pointer_to_symbol_table, number_of_symbols, sections_headers, results):
+def write_symbol_table(output, data, number_of_symbols, sections_headers, results):
     SECTION_SYMBOL_OFFSET = 12
     SECTION_SYMBOL_FORMAT = '<h'
     AUX_SYMBOLS_FORMAT = '<B'
@@ -1136,7 +1142,7 @@ def write_symbol_table(output, data, pointer_to_symbol_table, number_of_symbols,
     change_next = False
     section = None
     for i in range(0, number_of_symbols):
-        start = pointer_to_symbol_table + SYMBOL_SIZE * i
+        start = SYMBOL_SIZE * i
         symbol = data[start: start + SYMBOL_SIZE]
         if aux_symbols == 0:
             aux_symbols, = struct.unpack_from(AUX_SYMBOLS_FORMAT, symbol, AUX_SYMBOLS_OFFSET)
@@ -1166,7 +1172,6 @@ s2 = ''
 s11 = s1.lower()
 s21 = s2.lower()
 
-
 def patch(input_file, out_file, original_dir, canonical_dir):
     global s1, s2, s11, s21, mapping
     global RELOCATION_SHIFT
@@ -1186,16 +1191,18 @@ def patch(input_file, out_file, original_dir, canonical_dir):
 
     file_header_data = data[:FileHeader.SIZE]
     header = FileHeader(file_header_data)
-    old_pointer_to_symbol_table = header.pointer_to_symbol_table
 
     section_headers = SectionHeader.read_section_headers(data, header.number_of_sections)
-    to_copy_string_section = header.pointer_to_symbol_table + (SYMBOL_SIZE * header.number_of_symbols), len(data)
+    symbol_table_size = SYMBOL_SIZE * header.number_of_symbols
 
-    results = dump_sections(data, section_headers)
-    for result in results:
-        if result:
-            result.dump()
-            pass
+    symbol_table = data[header.pointer_to_symbol_table:header.pointer_to_symbol_table + symbol_table_size]
+    string_section = data[header.pointer_to_symbol_table + symbol_table_size:]
+
+    results = read_debug_sections(data, section_headers)
+    # for result in results:
+    #     if result:
+    #         result.dump()
+    #         pass
 
     for result in results:
         if result:
@@ -1203,12 +1210,11 @@ def patch(input_file, out_file, original_dir, canonical_dir):
 
     process(section_headers, data, results, data_output)
 
-    startX, endX = to_copy_string_section
     new_pointer_to_symbol_table = FileHeader.SIZE + SectionHeader.SIZE*header.number_of_sections + len(data_output)
 
     header.pointer_to_symbol_table = new_pointer_to_symbol_table
-    write_symbol_table(data_output, data, old_pointer_to_symbol_table, header.number_of_symbols, section_headers, results)
-    data_output.fromstring(data[startX:endX])
+    write_symbol_table(data_output, symbol_table, header.number_of_symbols, section_headers, results)
+    data_output.fromstring(string_section)
 
     header.write(output)
     SectionHeader.write_section_headers(
@@ -1218,8 +1224,6 @@ def patch(input_file, out_file, original_dir, canonical_dir):
     total_output = output + data_output
     with open(out_file, 'wb') as ofile:
         total_output.tofile(ofile)
-
-    print("TOCOPY: {0},{1}".format(hex(startX), hex(endX)))
 
 
 import optparse
