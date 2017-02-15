@@ -1,0 +1,43 @@
+{
+  "test_dir" : "06",
+  "steps": [
+    {
+      "compile" : {
+        "flags": ["/c", "/nologo", "main.cpp", "/Z7","/Fomain.obj"],
+        "cwd": "01"
+      }
+    },
+    {
+      "compile" : {
+        "flags": ["/c", "/nologo", "main.cpp", "/Z7", "/Fomain.obj"],
+        "cwd": "0123456789"
+      }
+    },
+    {
+      "zero_obj" : {
+        "input": "01/main.obj"
+      }
+    },
+    {
+      "zero_obj" : {
+        "input": "0123456789/main.obj"
+      }
+    },
+    {
+      "z7_patch" : {
+        "input": "0123456789/main.obj",
+        "output": "0123456789/main.patched.obj",
+        "original-dir": "0123456789",
+        "canonical-dir": "01"
+      }
+    },
+    {
+      "compare": {
+        "file1" : "01/main.obj",
+        "file2" : "0123456789/main.patched.obj"
+      }
+    }
+  ]
+}
+
+
