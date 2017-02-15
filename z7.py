@@ -1,9 +1,6 @@
 import struct
 import array
 
-SECTION_HEADERS_START = 20
-SECTION_HEADER_SIZE = 40
-
 SYMBOL_SIZE = 18
 
 class FileHeader(object):
@@ -27,6 +24,8 @@ class FileHeader(object):
 
     CHARACTERISTICS_OFFSET = 18
     CHARACTERISTICS_FORMAT = '<H'
+
+    SIZE = 20
 
     def __init__(self, data):
         self.machine, = struct.unpack_from(
@@ -112,6 +111,7 @@ class SectionHeader(object):
     NUMBER_OF_LINENUMBERS_FORMAT = '<H'
     CHARACTERISTICS_OFFSET = 36
     CHARACTERISTICS_FORMAT = '<I'
+    SIZE = 40
 
     @staticmethod
     def read_section_headers(data, number_of_sections):
@@ -120,10 +120,15 @@ class SectionHeader(object):
         for section_i in range(0, number_of_sections):
             section = SectionHeader(
                 data,
-                SECTION_HEADERS_START + (section_i * SECTION_HEADER_SIZE)
+                FileHeader.SIZE + (section_i * SectionHeader.SIZE)
             )
             sections.append(section)
         return sections
+
+    @staticmethod
+    def write_section_headers(output, sections):
+        for section in sections:
+            section.write(output)
 
     def __init__(self, data, section_start):
         self.name, = struct.unpack_from(
@@ -265,6 +270,7 @@ class DebugGenericSubsection(DebugSubsection):
         data_output.fromstring(struct.pack('<I', self.subsection_type))
         data_output.fromstring(struct.pack('<I', self.subsection_len))
         data_output.fromstring(self.subsection_data)
+
 
 class DebugSymbolsSubsection(DebugSubsection):
     def __init__(self, subsection_type, subsection_len, symbols):
@@ -1067,10 +1073,10 @@ def process(sections, data, results, data_output):
     """modifies sections, returns a number of removed bytes and a list of pairs (start, end) to copy"""
     removed_bytes = 0
     to_copy = []
-    # SECTION_HEADERS_START = 20
-    # SECTION_HEADER_SIZE = 40
+    # FileHeader.SIZE = 20
+    # SectionHeader.SIZE = 40
 
-    start = SECTION_HEADERS_START + SECTION_HEADER_SIZE*len(sections)
+    start = FileHeader.SIZE + SectionHeader.SIZE*len(sections)
     assert len(data_output) == 0
     for i in range(0, len(sections)):
         section = sections[i]
@@ -1119,11 +1125,6 @@ def process(sections, data, results, data_output):
 
 
     return removed_bytes, to_copy
-
-
-def write_section_headers(output, sections):
-    for section in sections:
-        section.write(output)
 
 
 def write_symbol_table(output, data, pointer_to_symbol_table, number_of_symbols, sections_headers, results):
@@ -1183,8 +1184,10 @@ def patch(input_file, out_file, original_dir, canonical_dir):
     output = array.array('b')
     data_output = array.array('b')
 
-    header = FileHeader(data)
+    file_header_data = data[:FileHeader.SIZE]
+    header = FileHeader(file_header_data)
     old_pointer_to_symbol_table = header.pointer_to_symbol_table
+
     section_headers = SectionHeader.read_section_headers(data, header.number_of_sections)
     to_copy_string_section = header.pointer_to_symbol_table + (SYMBOL_SIZE * header.number_of_symbols), len(data)
 
@@ -1201,14 +1204,14 @@ def patch(input_file, out_file, original_dir, canonical_dir):
     process(section_headers, data, results, data_output)
 
     startX, endX = to_copy_string_section
-    new_pointer_to_symbol_table = SECTION_HEADERS_START + SECTION_HEADER_SIZE*header.number_of_sections + len(data_output)
+    new_pointer_to_symbol_table = FileHeader.SIZE + SectionHeader.SIZE*header.number_of_sections + len(data_output)
 
     header.pointer_to_symbol_table = new_pointer_to_symbol_table
     write_symbol_table(data_output, data, old_pointer_to_symbol_table, header.number_of_symbols, section_headers, results)
     data_output.fromstring(data[startX:endX])
 
     header.write(output)
-    write_section_headers(
+    SectionHeader.write_section_headers(
         output,
         section_headers)
 
