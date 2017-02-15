@@ -1,59 +1,10 @@
 import struct
 import array
 
-# http://www.microsoft.com/whdc/system/platform/firmware/PECOFF.mspx
-MACHINE_OFFSET = 0
-MACHINE_FORMAT = '<H'
-
-NUMBER_OF_SECTIONS_OFFSET = 2
-NUMBER_OF_SECTIONS_FORMAT = '<H'
-
-TIME_DATE_STAMP_OFFSET = 4
-TIME_DATE_STAMP_FORMAT = '<I'
-
-POINTER_TO_SYMBOL_TABLE_OFFSET = 8
-POINTER_TO_SYMBOL_TABLE_FORMAT = '<I'
-
-NUMBER_OF_SYMBOLS_OFFSET = 12
-NUMBER_OF_SYMBOLS_FORMAT = '<I'
-
-SIZE_OF_OPTIONAL_HEADER_OFFSET = 16
-SIZE_OF_OPTIONAL_HEADER_FORMAT = '<H'
-
-CHARACTERISTICS_OFFSET = 18
-CHARACTERISTICS_FORMAT = '<H'
-
-COFF_FILE_HEADER_SIZE = 20
-
-# 4. Section Table (Section Headers)
 SECTION_HEADERS_START = 20
 SECTION_HEADER_SIZE = 40
 
-SECTION_HEADER_NAME_OFFSET = 0
-SECTION_HEADER_NAME_FORMAT = '8s'
-SECTION_HEADER_VIRTUAL_SIZE_OFFSET = 8
-SECTION_HEADER_VIRTUAL_SIZE_FORMAT = '<I'
-SECTION_HEADER_VIRTUAL_ADDRESS_OFFSET = 12
-SECTION_HEADER_VIRTUAL_ADDRESS_FORMAT = '<I'
-SECTION_HEADER_SIZE_OF_RAW_DATA_OFFSET = 16
-SECTION_HEADER_SIZE_OF_RAW_DATA_FORMAT = '<I'
-SECTION_HEADER_PTR_TO_RAW_DATA_OFFSET = 20
-SECTION_HEADER_PTR_TO_RAW_DATA_FORMAT = '<I'
-SECTION_HEADER_PTR_TO_RELOCATIONS_OFFSET = 24
-SECTION_HEADER_PTR_TO_RELOCATIONS_FORMAT = '<I'
-SECTION_HEADER_PTR_TO_LINE_NUMBERS_OFFSET = 28
-SECTION_HEADER_PTR_TO_LINE_NUMBERS_FORMAT = '<I'
-SECTION_HEADER_NUMBER_OF_RELOCATIONS_OFFSET = 32
-SECTION_HEADER_NUMBER_OF_RELOCATIONS_FORMAT = '<H'
-SECTION_HEADER_NUMBER_OF_LINENUMBERS_OFFSET = 34
-SECTION_HEADER_NUMBER_OF_LINENUMBERS_FORMAT = '<H'
-SECTION_HEADER_CHARACTERISTICS_OFFSET = 36
-SECTION_HEADER_CHARACTERISTICS_FORMAT = '<I'
-
 RELOCATION_SIZE = 10
-IMAGE_SCN_MEM_DISCARDABLE = 0x02000000
-IMAGE_SCN_LNK_COMDAT = 0x00001000
-
 SYMBOL_SIZE = 18
 AUX_SYMBOLS_FORMAT = '<B'
 AUX_SYMBOLS_OFFSET = 17
@@ -62,47 +13,68 @@ SECTION_SYMBOL_OFFSET = 12
 
 
 class FileHeader(object):
+    MACHINE_OFFSET = 0
+    MACHINE_FORMAT = '<H'
+
+    NUMBER_OF_SECTIONS_OFFSET = 2
+    NUMBER_OF_SECTIONS_FORMAT = '<H'
+
+    TIME_DATE_STAMP_OFFSET = 4
+    TIME_DATE_STAMP_FORMAT = '<I'
+
+    POINTER_TO_SYMBOL_TABLE_OFFSET = 8
+    POINTER_TO_SYMBOL_TABLE_FORMAT = '<I'
+
+    NUMBER_OF_SYMBOLS_OFFSET = 12
+    NUMBER_OF_SYMBOLS_FORMAT = '<I'
+
+    SIZE_OF_OPTIONAL_HEADER_OFFSET = 16
+    SIZE_OF_OPTIONAL_HEADER_FORMAT = '<H'
+
+    CHARACTERISTICS_OFFSET = 18
+    CHARACTERISTICS_FORMAT = '<H'
+
     def __init__(self, data):
         self.machine, = struct.unpack_from(
-            MACHINE_FORMAT,
+            FileHeader.MACHINE_FORMAT,
             data,
-            MACHINE_OFFSET
+            FileHeader.MACHINE_OFFSET
         )
 
         self.number_of_sections, = struct.unpack_from(
-            NUMBER_OF_SECTIONS_FORMAT,
+            FileHeader.NUMBER_OF_SECTIONS_FORMAT,
             data,
-            NUMBER_OF_SECTIONS_OFFSET
+            FileHeader.NUMBER_OF_SECTIONS_OFFSET
         )
 
         self.time_date_stamp, = struct.unpack_from(
-            TIME_DATE_STAMP_FORMAT,
+            FileHeader.TIME_DATE_STAMP_FORMAT,
             data,
-            TIME_DATE_STAMP_OFFSET
+            FileHeader.TIME_DATE_STAMP_OFFSET
         )
 
         self.pointer_to_symbol_table, = struct.unpack_from(
-            POINTER_TO_SYMBOL_TABLE_FORMAT,
+            FileHeader.POINTER_TO_SYMBOL_TABLE_FORMAT,
             data,
-            POINTER_TO_SYMBOL_TABLE_OFFSET
+            FileHeader.POINTER_TO_SYMBOL_TABLE_OFFSET
         )
 
         self.number_of_symbols, = struct.unpack_from(
-            NUMBER_OF_SYMBOLS_FORMAT,
+            FileHeader.NUMBER_OF_SYMBOLS_FORMAT,
             data,
-            NUMBER_OF_SYMBOLS_OFFSET
+            FileHeader.NUMBER_OF_SYMBOLS_OFFSET
         )
 
         self.size_of_optional_header, = struct.unpack_from(
-            SIZE_OF_OPTIONAL_HEADER_FORMAT,
+            FileHeader.SIZE_OF_OPTIONAL_HEADER_FORMAT,
             data,
-            SIZE_OF_OPTIONAL_HEADER_OFFSET
+            FileHeader.SIZE_OF_OPTIONAL_HEADER_OFFSET
         )
 
         self.characteristics, = struct.unpack_from(
-            CHARACTERISTICS_FORMAT,
+            FileHeader.CHARACTERISTICS_FORMAT,
             data,
-            CHARACTERISTICS_OFFSET
+            FileHeader.CHARACTERISTICS_OFFSET
         )
 
         # /GL compilation is not supported
@@ -110,95 +82,116 @@ class FileHeader(object):
 
     def write(self, output):
         output.fromstring(
-            struct.pack(MACHINE_FORMAT, self.machine))
+            struct.pack(FileHeader.MACHINE_FORMAT, self.machine))
         output.fromstring(
-            struct.pack(NUMBER_OF_SECTIONS_FORMAT, self.number_of_sections))
+            struct.pack(FileHeader.NUMBER_OF_SECTIONS_FORMAT, self.number_of_sections))
         output.fromstring(
-            struct.pack(TIME_DATE_STAMP_FORMAT, self.time_date_stamp)) # SIC
+            struct.pack(FileHeader.TIME_DATE_STAMP_FORMAT, self.time_date_stamp)) # SIC
         output.fromstring(
-            struct.pack(POINTER_TO_SYMBOL_TABLE_FORMAT, self.pointer_to_symbol_table))
+            struct.pack(FileHeader.POINTER_TO_SYMBOL_TABLE_FORMAT, self.pointer_to_symbol_table))
         output.fromstring(
-            struct.pack(NUMBER_OF_SYMBOLS_FORMAT, self.number_of_symbols))
+            struct.pack(FileHeader.NUMBER_OF_SYMBOLS_FORMAT, self.number_of_symbols))
         output.fromstring(
-            struct.pack(SIZE_OF_OPTIONAL_HEADER_FORMAT, self.size_of_optional_header))
+            struct.pack(FileHeader.SIZE_OF_OPTIONAL_HEADER_FORMAT, self.size_of_optional_header))
         output.fromstring(
-            struct.pack(CHARACTERISTICS_FORMAT, self.characteristics))
+            struct.pack(FileHeader.CHARACTERISTICS_FORMAT, self.characteristics))
 
 
 class SectionHeader(object):
+    NAME_OFFSET = 0
+    NAME_FORMAT = '8s'
+    VIRTUAL_SIZE_OFFSET = 8
+    VIRTUAL_SIZE_FORMAT = '<I'
+    VIRTUAL_ADDRESS_OFFSET = 12
+    VIRTUAL_ADDRESS_FORMAT = '<I'
+    SIZE_OF_RAW_DATA_OFFSET = 16
+    SIZE_OF_RAW_DATA_FORMAT = '<I'
+    PTR_TO_RAW_DATA_OFFSET = 20
+    PTR_TO_RAW_DATA_FORMAT = '<I'
+    PTR_TO_RELOCATIONS_OFFSET = 24
+    PTR_TO_RELOCATIONS_FORMAT = '<I'
+    PTR_TO_LINE_NUMBERS_OFFSET = 28
+    PTR_TO_LINE_NUMBERS_FORMAT = '<I'
+    NUMBER_OF_RELOCATIONS_OFFSET = 32
+    NUMBER_OF_RELOCATIONS_FORMAT = '<H'
+    NUMBER_OF_LINENUMBERS_OFFSET = 34
+    NUMBER_OF_LINENUMBERS_FORMAT = '<H'
+    CHARACTERISTICS_OFFSET = 36
+    CHARACTERISTICS_FORMAT = '<I'
+
     def __init__(self, data, section_start):
         self.name, = struct.unpack_from(
-            SECTION_HEADER_NAME_FORMAT,
+            SectionHeader.NAME_FORMAT,
             data,
-            section_start + SECTION_HEADER_NAME_OFFSET,
+            section_start + SectionHeader.NAME_OFFSET,
         )
         self.virtual_size, = struct.unpack_from(
-            SECTION_HEADER_VIRTUAL_SIZE_FORMAT,
+            SectionHeader.VIRTUAL_SIZE_FORMAT,
             data,
-            section_start + SECTION_HEADER_VIRTUAL_SIZE_OFFSET,
+            section_start + SectionHeader.VIRTUAL_SIZE_OFFSET,
         )
         self.virtual_address, = struct.unpack_from(
-            SECTION_HEADER_VIRTUAL_ADDRESS_FORMAT,
+            SectionHeader.VIRTUAL_ADDRESS_FORMAT,
             data,
-            section_start + SECTION_HEADER_VIRTUAL_ADDRESS_OFFSET,
+            section_start + SectionHeader.VIRTUAL_ADDRESS_OFFSET,
         )
         self.size_of_raw_data, = struct.unpack_from(
-            SECTION_HEADER_SIZE_OF_RAW_DATA_FORMAT,
+            SectionHeader.SIZE_OF_RAW_DATA_FORMAT,
             data,
-            section_start + SECTION_HEADER_SIZE_OF_RAW_DATA_OFFSET,
+            section_start + SectionHeader.SIZE_OF_RAW_DATA_OFFSET,
         )
         self.ptr_to_raw_data, = struct.unpack_from(
-            SECTION_HEADER_PTR_TO_RAW_DATA_FORMAT,
+            SectionHeader.PTR_TO_RAW_DATA_FORMAT,
             data,
-            section_start + SECTION_HEADER_PTR_TO_RAW_DATA_OFFSET,
+            section_start + SectionHeader.PTR_TO_RAW_DATA_OFFSET,
         )
         self.ptr_to_relocations, = struct.unpack_from(
-            SECTION_HEADER_PTR_TO_RELOCATIONS_FORMAT,
+            SectionHeader.PTR_TO_RELOCATIONS_FORMAT,
             data,
-            section_start + SECTION_HEADER_PTR_TO_RELOCATIONS_OFFSET,
+            section_start + SectionHeader.PTR_TO_RELOCATIONS_OFFSET,
         )
         self.ptr_to_linenumbers, = struct.unpack_from(
-            SECTION_HEADER_PTR_TO_LINE_NUMBERS_FORMAT,
+            SectionHeader.PTR_TO_LINE_NUMBERS_FORMAT,
             data,
-            section_start + SECTION_HEADER_PTR_TO_LINE_NUMBERS_OFFSET,
+            section_start + SectionHeader.PTR_TO_LINE_NUMBERS_OFFSET,
         )
         self.number_of_relocations, = struct.unpack_from(
-            SECTION_HEADER_NUMBER_OF_RELOCATIONS_FORMAT,
+            SectionHeader.NUMBER_OF_RELOCATIONS_FORMAT,
             data,
-            section_start + SECTION_HEADER_NUMBER_OF_RELOCATIONS_OFFSET,
+            section_start + SectionHeader.NUMBER_OF_RELOCATIONS_OFFSET,
         )
         self.numbers_of_linenumbers, = struct.unpack_from(
-            SECTION_HEADER_NUMBER_OF_LINENUMBERS_FORMAT,
+            SectionHeader.NUMBER_OF_LINENUMBERS_FORMAT,
             data,
-            section_start + SECTION_HEADER_NUMBER_OF_LINENUMBERS_OFFSET,
+            section_start + SectionHeader.NUMBER_OF_LINENUMBERS_OFFSET,
         )
         self.characteristics, = struct.unpack_from(
-            SECTION_HEADER_CHARACTERISTICS_FORMAT,
+            SectionHeader.CHARACTERISTICS_FORMAT,
             data,
-            section_start + SECTION_HEADER_CHARACTERISTICS_OFFSET
+            section_start + SectionHeader.CHARACTERISTICS_OFFSET
         )
 
     def write(self, output):
         output.fromstring(
-            struct.pack(SECTION_HEADER_NAME_FORMAT, self.name))
+            struct.pack(SectionHeader.NAME_FORMAT, self.name))
         output.fromstring(
-            struct.pack(SECTION_HEADER_VIRTUAL_SIZE_FORMAT, self.virtual_size))
+            struct.pack(SectionHeader.VIRTUAL_SIZE_FORMAT, self.virtual_size))
         output.fromstring(
-            struct.pack(SECTION_HEADER_VIRTUAL_ADDRESS_FORMAT, self.virtual_address))
+            struct.pack(SectionHeader.VIRTUAL_ADDRESS_FORMAT, self.virtual_address))
         output.fromstring(
-            struct.pack(SECTION_HEADER_SIZE_OF_RAW_DATA_FORMAT, self.size_of_raw_data))
+            struct.pack(SectionHeader.SIZE_OF_RAW_DATA_FORMAT, self.size_of_raw_data))
         output.fromstring(
-            struct.pack(SECTION_HEADER_PTR_TO_RAW_DATA_FORMAT, self.ptr_to_raw_data))
+            struct.pack(SectionHeader.PTR_TO_RAW_DATA_FORMAT, self.ptr_to_raw_data))
         output.fromstring(
-            struct.pack(SECTION_HEADER_PTR_TO_RELOCATIONS_FORMAT, self.ptr_to_relocations))
+            struct.pack(SectionHeader.PTR_TO_RELOCATIONS_FORMAT, self.ptr_to_relocations))
         output.fromstring(
-            struct.pack(SECTION_HEADER_PTR_TO_LINE_NUMBERS_FORMAT, self.ptr_to_linenumbers))
+            struct.pack(SectionHeader.PTR_TO_LINE_NUMBERS_FORMAT, self.ptr_to_linenumbers))
         output.fromstring(
-            struct.pack(SECTION_HEADER_NUMBER_OF_RELOCATIONS_FORMAT, self.number_of_relocations))
+            struct.pack(SectionHeader.NUMBER_OF_RELOCATIONS_FORMAT, self.number_of_relocations))
         output.fromstring(
-            struct.pack(SECTION_HEADER_NUMBER_OF_LINENUMBERS_FORMAT, self.numbers_of_linenumbers))
+            struct.pack(SectionHeader.NUMBER_OF_LINENUMBERS_FORMAT, self.numbers_of_linenumbers))
         output.fromstring(
-            struct.pack(SECTION_HEADER_CHARACTERISTICS_FORMAT, self.characteristics))
+            struct.pack(SectionHeader.CHARACTERISTICS_FORMAT, self.characteristics))
 
     def should_strip_section(self):
         # IMAGE_SCN_LNK_COMDAT - debug$S may have IMAGE_SCN_LNK_COMDAT for imported functions

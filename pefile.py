@@ -31,7 +31,6 @@ __contact__ = 'ero.carrera@gmail.com'
 import struct
 import sys
 import string
-import mmap
 
 PY3 = sys.version_info > (3,)
 
@@ -655,11 +654,7 @@ class PE(object):
 
 
     def close(self):
-        if ( self.__from_file is True and hasattr(self, '__data__') and
-            ((isinstance(mmap.mmap, type) and isinstance(self.__data__, mmap.mmap)) or
-           'mmap.mmap' in repr(type(self.__data__))) ):
-                self.__data__.close()
-                del self.__data__
+        pass
 
 
     def __unpack_data__(self, format, data, file_offset):
