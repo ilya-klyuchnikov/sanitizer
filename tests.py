@@ -82,7 +82,7 @@ def compile(test_dir, flags, cwd):
         work_dir = "{0}/{1}".format(test_dir, cwd)
     command = [CL_EXE] + flags + INCLUDE_FLAGS
     print(" ".join(map(pipes.quote, command)))
-    print "cwd = {0}".format(work_dir)
+    print("cwd = {0}".format(work_dir))
     result = subprocess.call(command, cwd=work_dir)
     assert result == 0
 
@@ -119,7 +119,7 @@ def fix_pe(test_dir, input, output):
     output_file = "{0}/{1}".format(test_dir, output)
     print("fix_pe {0} --> {1}".format(input_file, output_file))
     pe = pefile.PE(input_file)
-    print "========{0}".format(pe.FILE_HEADER.TimeDateStamp)
+    print("========{0}".format(pe.FILE_HEADER.TimeDateStamp))
     pe.default_timestamp()
     pe.write(output_file)
     pe.close()
@@ -158,7 +158,7 @@ def exec_test(t):
 
     shutil.copytree(input_dir, test_dir)
     steps = config['steps']
-    print("==============={0}===============").format(test_dir)
+    print("==============={0}===============".format(test_dir))
     for step in steps:
         execute_step(test_dir, step)
 

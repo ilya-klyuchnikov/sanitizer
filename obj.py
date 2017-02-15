@@ -262,7 +262,7 @@ def write_symbol_table(output, data, pointer_to_symbol_table, number_of_symbols,
         else:
             aux_symbols -= 1
             if removing_symbol:
-                output.fromstring(str(bytearray(SYMBOL_SIZE)))
+                output.extend(bytearray(SYMBOL_SIZE))
             else:
                 output.fromstring(symbol)
 
