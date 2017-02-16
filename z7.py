@@ -470,58 +470,51 @@ class Symbol(object):
 
 # https://github.com/Microsoft/microsoft-pdb/blob/082c5290e5aff028ae84e43affa8be717aa7af73/include/cvinfo.h#L3382
 class ObjNameSymbol(Symbol):
-    def __init__(self, subsection_data):
-        self.subsection_data = subsection_data
-
-    def dump(self):
-        reclen, = struct.unpack_from('<H', self.subsection_data, 0)  # 2
-        type, = struct.unpack_from('<H', self.subsection_data, 2)  # 2
-        type_len = 2
-        signature = struct.unpack_from('<I', self.subsection_data, 4)
-        signature_len = 4
-        slen = reclen - signature_len - type_len  # (type, signature)
-        slen_len = 2
-        fmt = '{0}s'.format(slen)
-        name, = struct.unpack_from(fmt, self.subsection_data, 8)
-        # null terminated
-        print('    S_OBJNAME: {0}'.format(name))
+    def __init__(self, type, data):
+        self.type = type
+        self.data = data
 
     def patch(self):
-        name = self.subsection_data[8:]
-        result = name.replace(s1, s2)
-        print("   S_OBJNAME: {0} -> {1}".format(name, result))
         pass
 
     def patched_result(self, data_output):
-        result = self.subsection_data
+        signature, = struct.unpack_from('<I', self.data)
+        # path itself
+        result = self.data[4:]
         if result.find(s1) != -1:
             result = result.replace(s1, s2)
-
         if result.find(s11) != -1:
             result = result.replace(s11, s21)
-        data_output.fromstring(struct.pack('<H', len(result) - 2))
-        data_output.fromstring(result[2:])
-
+        data_output.fromstring(struct.pack('<H', len(result) + 6))
+        data_output.fromstring(struct.pack('<H', self.type))
+        data_output.fromstring(struct.pack('<I', signature))
+        data_output.fromstring(result)
 
 class BuildInfoSymbol(Symbol):
-    def __init__(self, subsection_data):
-        self.subsection_data = subsection_data
+    def __init__(self, type, data):
+        self.type = type
+        self.data = data
 
     def dump(self):
-        reclen, = struct.unpack_from('<H', self.subsection_data, 0)  # 2
-        id, = struct.unpack_from('<I', self.subsection_data, 4)
-        print('    S_BUILDINFO: {0}'.format(hex(id)))
+        pass
 
     def patch(self):
+        # TODO - update ID here
+        id, = struct.unpack_from('<I', self.data)
+        print('    S_BUILDINFO: {0}'.format(hex(id)))
         pass
 
     def patched_result(self, data_output):
-        data_output.fromstring(self.subsection_data)
+        # TODO - update it!!!
+        data_output.fromstring(struct.pack('<H', len(self.data) + 2))
+        data_output.fromstring(struct.pack('<H', self.type))
+        data_output.fromstring(self.data)
 
 
 class GenericSymbol(Symbol):
-    def __init__(self, subsection_data):
-        self.subsection_data = subsection_data
+    def __init__(self, type, data):
+        self.type = type
+        self.data = data
 
     def dump(self):
         pass
@@ -530,7 +523,9 @@ class GenericSymbol(Symbol):
         pass
 
     def patched_result(self, data_output):
-        data_output.fromstring(self.subsection_data)
+        data_output.fromstring(struct.pack('<H', len(self.data) + 2))
+        data_output.fromstring(struct.pack('<H', self.type))
+        data_output.fromstring(self.data)
 
 
 def read_debug_symbols_section(data, section_header):
@@ -580,22 +575,23 @@ def read_debug_symbols_section(data, section_header):
             while left > 0:
                 reclen, = struct.unpack_from('<H', sub_data, ibSym)  # 2
                 reclen_len = 2
-                symbolData = sub_data[ibSym: ibSym + reclen + reclen_len]
                 type, = struct.unpack_from('<H', sub_data, ibSym + reclen_len)  # 2
+                # prefix length here
+                p_len = 4
+                symbolData = sub_data[ibSym: ibSym + reclen + reclen_len]
                 if type == S_OBJNAME:
                     to_change_this = True
                     to_change = True
-                    symbol = ObjNameSymbol(symbolData)
+                    symbol = ObjNameSymbol(type, symbolData[p_len:])
                 elif type == S_BUILDINFO:
                     to_change_this = True
                     to_change = True
-                    symbol = BuildInfoSymbol(symbolData)
+                    symbol = BuildInfoSymbol(type, symbolData[p_len:])
                 else:
-                    symbol = GenericSymbol(symbolData)
+                    symbol = GenericSymbol(type, symbolData[p_len:])
                 symbols.append(symbol)
                 ibSym += 2 + reclen  # type
                 left -= (2 + reclen)
-
             if to_change_this:
                 subsections.append(DebugSymbolsSubsection(subsection_type, subsection_len, symbols))
             else:
