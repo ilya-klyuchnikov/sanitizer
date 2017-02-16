@@ -20,8 +20,9 @@ LIBPATH_FLAGS = [
 INCLUDE_FLAGS = [
     '/IC:\\Program Files (x86)\\Microsoft Visual Studio 14.0\\VC\\include',
     '/IC:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.10586.0\\ucrt',
-    '/IC:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.10586.0\\um',
+    #'/IC:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.10586.0\\um',
     '/IC:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.10586.0\\shared',
+    '/Iyyyy',
 ]
 
 CL_EXE = "C:\\Program Files (x86)\\Microsoft Visual Studio 14.0\\VC\\bin\\amd64\\cl.exe"
