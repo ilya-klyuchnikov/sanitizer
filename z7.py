@@ -505,10 +505,11 @@ class BuildInfoSymbol(Symbol):
         pass
 
     def patched_result(self, data_output):
-        # TODO - update it!!!
         data_output.fromstring(struct.pack('<H', len(self.data) + 2))
         data_output.fromstring(struct.pack('<H', self.type))
-        data_output.fromstring(self.data)
+        global build_info_index
+        id, = struct.unpack_from('<I', self.data)
+        data_output.fromstring(struct.pack('<I', build_info_index))
 
 
 class GenericSymbol(Symbol):
@@ -620,6 +621,8 @@ def read_debug_symbols_section(data, section_header):
 # TYPES
 ###############
 
+build_info_index = 0
+
 TYPES_SHIFT = 0x1000
 class DebugTypesSection(object):
     def __init__(self, leaves):
@@ -639,8 +642,6 @@ class DebugTypesSection(object):
         data_output.fromstring(struct.pack('<I', 4))
         for leaf in self.leaves[:self.build_info.offset]:
             leaf.patched_result(data_output)
-        self.build_info.patch()
-        self.build_info.serialize()
         for leaf in self.build_info.symbols:
             leaf.patched_result(data_output)
 
@@ -656,6 +657,10 @@ class DebugTypesSection(object):
         pdb = self.get_string(refs[3])
         args = self.get_string(refs[4])
         self.build_info = BuildInfo(self.min_offset, workdir, build_tool, source_file, pdb, args)
+        self.build_info.patch()
+        self.build_info.serialize()
+        global build_info_index
+        build_info_index = TYPES_SHIFT + self.build_info.offset + len(self.build_info.symbols) - 1
 
 
     def get_string(self, ref):
@@ -1170,6 +1175,10 @@ def patch(input_file, out_file, original_dir, canonical_dir):
 
     results = read_debug_sections(data, section_headers)
 
+    # this is the 2-stage process
+    # the first step is preparing data - and changing lengts of sections
+    # the second step can be done in place
+    # current hack - to use global variables
     for result in results:
         if result:
             result.patch()
