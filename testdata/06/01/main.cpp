@@ -1,6 +1,10 @@
 #include <stdio.h>
 
-int main() {
-    printf("hello %s", "guest");
-    return 0;
+char* getName() {
+  return "me";
+}
+
+int main(int argc, char const *argv[]) {
+  printf("%s\n", getName());
+  return 0;
 }

@@ -621,8 +621,6 @@ def read_debug_symbols_section(data, section_header):
 # TYPES
 ###############
 
-build_info_index = 0
-
 TYPES_SHIFT = 0x1000
 class DebugTypesSection(object):
     def __init__(self, leaves):
@@ -1138,8 +1136,8 @@ def write_symbol_table(output, data, number_of_symbols, sections_headers, result
                 output.fromstring(symbol)
 
 
-# TODO - we can support the full parsing of symbols (microsoft-pdb allows it)
-# TODO - and then we can more reasonably move symbols:
+# TODO - get rid of all
+build_info_index = 0
 RELOCATION_SHIFT = [False, 0, True]
 mapping = {}
 s1 = ''

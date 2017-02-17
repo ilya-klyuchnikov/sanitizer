@@ -26,6 +26,7 @@ INCLUDE_FLAGS = [
 ]
 
 CL_EXE = "C:\\Program Files (x86)\\Microsoft Visual Studio 14.0\\VC\\bin\\amd64\\cl.exe"
+CL_EXE_32 = "C:\\Program Files (x86)\\Microsoft Visual Studio 14.0\\VC\\bin\\cl.exe"
 LIB_EXE = "C:\\Program Files (x86)\\Microsoft Visual Studio 14.0\\VC\\bin\\amd64\\lib.exe"
 LINK_EXE = "C:\\Program Files (x86)\\Microsoft Visual Studio 14.0\\VC\\bin\\amd64\\link.exe"
 
@@ -81,7 +82,10 @@ def compile(test_dir, flags, cwd):
     work_dir = test_dir
     if cwd:
         work_dir = "{0}/{1}".format(test_dir, cwd)
-    command = [CL_EXE] + flags + INCLUDE_FLAGS
+    if test_dir == '05' or test_dir == '06':
+        command = [CL_EXE_32] + flags + INCLUDE_FLAGS
+    else:
+        command = [CL_EXE] + flags + INCLUDE_FLAGS
     print(" ".join(map(pipes.quote, command)))
     print("cwd = {0}".format(work_dir))
     result = subprocess.call(command, cwd=work_dir)
