@@ -212,10 +212,6 @@ class SectionHeader(object):
 # SYMBOLS
 ###############
 
-#define CV_SIGNATURE_C7         1L  // First explicit signature
-#define CV_SIGNATURE_C11        2L  // C11 (vc5.x) 32-bit types
-#define CV_SIGNATURE_C13        4L  // C13 (vc7.x) zero terminated names
-
 DEBUG_S_SYMBOLS     = 0xf1
 DEBUG_S_STRINGTABLE = 243
 DEBUG_S_FILECHKSMS  = 244
@@ -233,10 +229,6 @@ CV_SIGNATURE_C13    = 4
 class DebugSymbolsSection(object):
     def __init__(self, subsections):
         self.subsections = subsections
-
-    def dump(self):
-        for subsection in self.subsections:
-            subsection.dump()
 
     def patch(self):
         for subsection in self.subsections:
@@ -264,9 +256,6 @@ class DebugGenericSubsection(DebugSubsection):
         self.subsection_len = subsection_len
         self.subsection_data = subsection_data
 
-    def dump(self):
-        pass
-
     def patch(self):
         pass
 
@@ -281,10 +270,6 @@ class DebugSymbolsSubsection(DebugSubsection):
         self.subsection_type = subsection_type
         self.subsection_len = subsection_len
         self.symbols = symbols
-
-    def dump(self):
-        for symbol in self.symbols:
-            symbol.dump()
 
     def patch(self):
         for symbol in self.symbols:
@@ -328,12 +313,6 @@ class DebugFramedataSubsection(DebugSubsection):
         self.subsection_len = subsection_len
         self.subsection_data = subsection_data
 
-    def dump(self):
-        print('  FRAMEDATA')
-        # the size of data - 32
-        ppointer, = struct.unpack_from('<I', self.subsection_data,  24)
-        print('    pointer: {0}'.format(hex(ppointer)))
-
     def patch(self):
         pass
 
@@ -358,12 +337,6 @@ class DebugStringTableSubsection(DebugSubsection):
         self.subsection_len = subsection_len
         self.subsection_data = subsection_data
         self.init()
-
-    def dump(self):
-        print('  STRINGTABLE')
-        table = self.subsection_data
-        strs = table.split('\0')
-        print(strs)
 
     def patch(self):
         pass
@@ -430,16 +403,6 @@ class DebugFileChkSumSubsection(DebugSubsection):
         self.subsection_len = subsection_len
         self.subsection_data = subsection_data
 
-    def dump(self):
-        ibSym = 0
-        left = len(self.subsection_data)
-        print('  FILECHKSMS')
-        while left > 0:
-            my_data = self.subsection_data[ibSym:ibSym + 24]
-            offset, = struct.unpack_from('<I', my_data, 0)
-            print('     oFFSET: {0}'.format(hex(offset)))
-            ibSym += 24
-            left -= 24
 
     def patch(self):
         pass
@@ -495,9 +458,6 @@ class BuildInfoSymbol(Symbol):
         self.type = type
         self.data = data
 
-    def dump(self):
-        pass
-
     def patch(self):
         # TODO - update ID here
         id, = struct.unpack_from('<I', self.data)
@@ -516,9 +476,6 @@ class GenericSymbol(Symbol):
     def __init__(self, type, data):
         self.type = type
         self.data = data
-
-    def dump(self):
-        pass
 
     def patch(self):
         pass
@@ -626,12 +583,6 @@ class DebugTypesSection(object):
     def __init__(self, leaves):
         self.leaves = leaves
         self.min_offset = len(leaves)
-
-    def dump(self):
-        i = 0x1000
-        for leaf in self.leaves:
-            leaf.dump(i)
-            i += 1
 
     def patch(self):
         pass
@@ -792,9 +743,6 @@ class LeafGeneric(Leaf):
     def __init__(self, data):
         self.data = data
 
-    def dump(self, id):
-        pass
-
     def patched_result(self, data_output):
         data_output.fromstring(self.data)
 
@@ -802,13 +750,6 @@ class LeafGeneric(Leaf):
 class BuildInfoLeaf(Leaf):
     def __init__(self, data):
         self.data = data
-
-    def dump(self, id):
-        count, = struct.unpack_from('<H', self.data, 4)  # 2
-        assert count == 5
-        for i in range(0, count):
-            ref, = struct.unpack_from('<I', self.data, 6 + i * 4)
-            #print '             |LF_BUILDINFO: ref:{0}'.format(hex(ref))
 
     def patched_result(self, data_output):
         data_output.fromstring(self.data)
@@ -825,13 +766,6 @@ class BuildInfoLeafEx(Leaf):
     def __init__(self, refs):
         self.refs = refs
 
-    def dump(self, id):
-        count, = struct.unpack_from('<H', self.data, 4)  # 2
-        assert count == 5
-        for i in range(0, count):
-            ref, = struct.unpack_from('<I', self.data, 6 + i * 4)
-            #print '             |LF_BUILDINFO: ref:{0}'.format(hex(ref))
-
     def patched_result(self, data_output):
         lennn = 6 + len(self.refs) * 4  # type(2), size(2), len*data(4)
         data_output.fromstring(struct.pack('<H', lennn))
@@ -845,17 +779,6 @@ class BuildInfoLeafEx(Leaf):
 class StringLeaf(Leaf):
     def __init__(self, data):
         self.data = data
-
-    def dump(self, id):
-        ref, = struct.unpack_from('<I', self.data, 4)
-        s = self.data[8:]
-        s_len = len(s)
-        assert (s_len % 4) == 0
-        #print '   --------'
-        ##print '   {0}'.format(hex(id))
-        #print '   LF_STRING_ID'
-        #print '             |substringref:{0}'.format(hex(ref))
-        #print '             |s:{0}'.format((s,))
 
     def patched_result(self, data_output):
         prefix = self.data[0:8]
@@ -910,17 +833,6 @@ class StringLeafEx(Leaf):
         self.s = s
         self.ref = ref
 
-    def dump(self, id):
-        ref, = struct.unpack_from('<I', self.data, 4)
-        s = self.data[8:]
-        s_len = len(s)
-        assert (s_len % 4) == 0
-        print('   --------')
-        print('   {0}'.format(hex(id)))
-        print('   LF_STRING_ID')
-        print('             |substringref:{0}'.format(hex(ref)))
-        print('             |s:{0}'.format((s,)))
-
     def patched_result(self, data_output):
         s = self.s
 
@@ -945,16 +857,6 @@ class SubstringLeaf(Leaf):
     def __init__(self, data):
         self.data = data
 
-    def dump(self, id):
-        count, = struct.unpack_from('<I', self.data, 4)  # 4
-        print('   --------')
-        print('   {0}'.format(hex(id)))
-        print('             |LF_SUBSTR_LIST: count:{0}'.format(count))
-        # references
-        for i in range(0, count):
-            ref, = struct.unpack_from('<I', self.data, 8 + i * 4)
-            print('             |LF_SUBSTR_LIST: ref:{0}'.format(hex(ref)))
-
     def patched_result(self, data_output):
         data_output.fromstring(self.data)
 
@@ -970,16 +872,6 @@ class SubstringLeaf(Leaf):
 class SubstringLeafEx(Leaf):
     def __init__(self, refs):
         self.refs = refs
-
-    def dump(self, id):
-        count, = struct.unpack_from('<I', self.data, 4)  # 4
-        print('   --------')
-        print('   {0}'.format(hex(id)))
-        print('             |LF_SUBSTR_LIST: count:{0}'.format(count))
-        # references
-        for i in range(0, count):
-            ref, = struct.unpack_from('<I', self.data, 8 + i * 4)
-            print('             |LF_SUBSTR_LIST: ref:{0}'.format(hex(ref)))
 
     def patched_result(self, data_output):
         lennn = 6 + len(self.refs) * 4 # type(2), size(4), len*data(4)
