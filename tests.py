@@ -80,9 +80,10 @@ def execute_step(test_dir, step):
 
 def compile(test_dir, flags, cwd):
     work_dir = test_dir
+    print ">>>>>>>>>>>>>>>>>:{0}".format(test_dir)
     if cwd:
         work_dir = "{0}/{1}".format(test_dir, cwd)
-    if test_dir == '05' or test_dir == '06':
+    if test_dir == 'tmp/05' or test_dir == 'tmp/06':
         command = [CL_EXE_32] + flags + INCLUDE_FLAGS
     else:
         command = [CL_EXE] + flags + INCLUDE_FLAGS
